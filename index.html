@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ARM Assembly Block Builder – Lab 2</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0b10;--surf0:#11131e;--surf1:#191c2a;--surf2:#21253a;
+  --border:#2f3455;--border2:#3d4470;
+  --text:#f0f4ff;--dim:#a0aec8;--dim2:#6070a0;
+  --accent:#8b6cf7;--accent2:#22d3ee;
+  --success:#4ade80;--error:#f87171;--warn:#fbbf24;
+  --mn-bg:#fef9c3;--mn-bd:#b45309;--mn-tx:#431407;
+  --rg-bg:#dbeafe;--rg-bd:#1d4ed8;--rg-tx:#1e3a8a;
+  --mm-bg:#dcfce7;--mm-bd:#15803d;--mm-tx:#14532d;
+  --im-bg:#ede9fe;--im-bd:#6d28d9;--im-tx:#2e1065;
+  --lb-bg:#fce7f3;--lb-bd:#be185d;--lb-tx:#831843;
+  --dr-bg:#ccfbf1;--dr-bd:#0f766e;--dr-tx:#042f2e;
+  --dv-bg:#fee2e2;--dv-bd:#b91c1c;--dv-tx:#7f1d1d;
+}
+body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:18px}
+.header{background:var(--surf0);border-bottom:2px solid var(--border);padding:10px 22px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.hlogo{width:40px;height:40px;background:linear-gradient(135deg,#8b6cf7,#22d3ee);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.htitle{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.hsub{font-size:13px;color:var(--dim);margin-top:1px}
+.tabs{background:var(--surf0);border-bottom:2px solid var(--border);display:flex;padding:0 22px;gap:2px;flex-shrink:0}
+.tab{padding:9px 18px 10px;border-radius:7px 7px 0 0;cursor:pointer;font-size:14px;font-weight:700;color:var(--dim);border:1.5px solid transparent;border-bottom:none;transition:all .15s;user-select:none;display:flex;align-items:center;gap:7px}
+.tab:hover{color:var(--text);background:var(--surf1)}
+.tab.active{color:var(--text);background:var(--bg);border-color:var(--border);border-bottom-color:var(--bg)}
+.badge-a{background:var(--accent);color:#fff;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700}
+.prog-view{display:flex;flex-direction:column;height:calc(100vh - 114px)}
+.prog-body{display:grid;grid-template-columns:1fr 320px;flex:1;overflow:hidden}
+.code-panel{overflow-y:auto;padding:14px 18px;border-right:2px solid var(--border);scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.goal-box{background:var(--surf1);border:1.5px solid var(--border);border-left:4px solid var(--accent2);border-radius:0 10px 10px 0;padding:12px 16px;margin-bottom:14px;font-size:15px;color:var(--dim);line-height:1.65}
+.goal-box strong{color:var(--text)}
+.goal-box code{font-family:'JetBrains Mono',monospace;background:var(--surf2);border-radius:4px;padding:1px 6px;font-size:13.5px;color:#a5b4fc}
+.code-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.hint-btn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);cursor:pointer;padding:5px 14px;border:1.5px solid var(--border);border-radius:20px;background:var(--surf1);user-select:none;transition:all .13s}
+.hint-btn:hover{border-color:var(--border2);color:var(--text)}
+.hint-btn.on{border-color:var(--warn);color:var(--warn);background:rgba(251,191,36,.09)}
+.code-card{background:var(--surf1);border:1.5px solid var(--border);border-radius:10px;overflow:hidden}
+.card-bar{background:var(--surf2);padding:8px 16px;display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--dim)}
+.dot{width:11px;height:11px;border-radius:50%}
+.line-row{display:flex;align-items:center;min-height:42px;padding:3px 16px;border-bottom:1px solid rgba(255,255,255,.03);font-family:'JetBrains Mono',monospace;font-size:16.5px}
+.line-row:last-child{border-bottom:none}
+.line-blank{min-height:10px}
+.line-given{opacity:.38}
+.lnum{width:30px;text-align:right;color:var(--dim2);font-size:12px;margin-right:16px;flex-shrink:0;user-select:none}
+.lbody{display:flex;align-items:center;flex-wrap:wrap;gap:0;flex:1}
+.tfx{color:#8892b0;white-space:pre}
+.tlbl{color:#fbbf24;font-weight:700}
+.tsep{color:var(--dim)}
+.intent-col{margin-left:auto;padding-left:12px;flex-shrink:0;max-width:240px}
+.intent-pill{display:inline-flex;align-items:center;gap:5px;background:rgba(34,211,238,.07);border:1.5px solid rgba(34,211,238,.2);border-radius:20px;padding:3px 11px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#67e8f9;white-space:nowrap}
+/* SLOTS */
+.slot{display:inline-flex;align-items:center;justify-content:center;min-width:58px;height:34px;border:2.5px dashed var(--border2);border-radius:6px;cursor:pointer;padding:0 9px;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;user-select:none;white-space:nowrap;transition:border-color .12s,background .12s}
+.slot.drop:hover{border-color:var(--accent2);background:rgba(34,211,238,.08)}
+.slot.filled{border-style:solid;border-width:2px}
+.slot.ok{border-color:var(--success)!important;background:rgba(74,222,128,.1)!important}
+.slot.bad{border-color:var(--error)!important;background:rgba(248,113,113,.1)!important}
+/* block colour classes */
+.bl-mn{background:var(--mn-bg);border-color:var(--mn-bd);color:var(--mn-tx)}
+.bl-rg{background:var(--rg-bg);border-color:var(--rg-bd);color:var(--rg-tx)}
+.bl-mm{background:var(--mm-bg);border-color:var(--mm-bd);color:var(--mm-tx)}
+.bl-im{background:var(--im-bg);border-color:var(--im-bd);color:var(--im-tx)}
+.bl-lb{background:var(--lb-bg);border-color:var(--lb-bd);color:var(--lb-tx)}
+.bl-dr{background:var(--dr-bg);border-color:var(--dr-bd);color:var(--dr-tx)}
+.bl-dv{background:var(--dv-bg);border-color:var(--dv-bd);color:var(--dv-tx)}
+/* VANILLA TOOLTIP — no React state, no re-renders */
+#tip{position:fixed;z-index:9999;pointer-events:none;display:none;max-width:300px;background:#0f172a;border:1.5px solid #334155;border-radius:10px;padding:11px 14px;font-size:14px;font-family:'Syne',sans-serif;line-height:1.6;color:#e2e8f0;box-shadow:0 10px 40px rgba(0,0,0,.8)}
+#tip .tn{font-weight:800;color:#fff;font-size:14.5px;margin-bottom:3px;font-family:'JetBrains Mono',monospace}
+#tip .tc{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;color:#64748b}
+#tip .tb{color:#94a3b8;font-size:13px;line-height:1.65}
+#tip .tb code{font-family:'JetBrains Mono',monospace;background:rgba(255,255,255,.07);border-radius:3px;padding:1px 5px;color:#a5b4fc}
+/* PALETTE */
+.pal-panel{overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:13px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent;background:var(--surf0)}
+.pal-hint{font-size:13px;color:var(--dim);line-height:1.6;padding:9px 12px;background:var(--surf1);border:1.5px solid var(--border);border-radius:7px}
+.pal-hint strong{color:var(--text)}
+.cat-head{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim2);margin-bottom:7px}
+.cat-blks{display:flex;flex-wrap:wrap;gap:6px}
+.pbl{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 12px;border-radius:7px;border:2px solid;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;transition:filter .13s,transform .13s,box-shadow .13s,outline .13s;user-select:none;white-space:nowrap}
+.pbl:hover{filter:brightness(.82);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.3)}
+.pbl.sel{outline:3px solid #fff;outline-offset:2px;transform:scale(1.09);box-shadow:0 4px 18px rgba(139,108,247,.55)}
+/* BOTTOM */
+.bbar{flex-shrink:0;background:var(--surf1);border-top:2px solid var(--border);padding:11px 20px;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+.btn{padding:9px 22px;border-radius:8px;border:none;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .13s;display:flex;align-items:center;gap:7px}
+.btn-t{background:linear-gradient(135deg,#8b6cf7,#5b36d0);color:#fff}
+.btn-t:hover{filter:brightness(1.15);box-shadow:0 4px 18px rgba(139,108,247,.5)}
+.btn-r{background:var(--surf2);color:var(--dim);border:1.5px solid var(--border)}
+.btn-r:hover{color:var(--text);border-color:var(--border2)}
+.rmsg{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.c-ok{color:var(--success)}.c-err{color:var(--error)}.c-info{color:var(--accent2)}
+.scnt{margin-left:auto;font-size:13px;color:var(--dim)}
+/* MEMORY VIZ */
+.mviz{margin-top:16px;background:var(--surf1);border:1.5px solid var(--border);border-radius:10px;padding:16px 18px}
+.mviz-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.mviz-ttl{font-size:14px;font-weight:800;color:var(--accent2)}
+.abtn{padding:6px 14px;background:var(--surf2);color:var(--text);border:1.5px solid var(--border2);border-radius:7px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .13s}
+.abtn:hover{border-color:var(--accent2);color:var(--accent2)}
+.albl{font-size:12px;color:var(--dim);margin-bottom:7px;font-family:'JetBrains Mono',monospace}
+.acells{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:14px}
+.mcell{width:44px;height:40px;border-radius:5px;border:2px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;transition:all .2s;position:relative}
+.mcell .ci{position:absolute;top:2px;left:0;right:0;text-align:center;font-size:9px;opacity:.5;font-weight:400}
+.mc-e{border-color:var(--border);background:var(--surf0);color:transparent}
+.mc-a{border-color:#3b82f6;background:rgba(59,130,246,.15);color:#93c5fd}
+.mc-s{border-color:#22c55e;background:rgba(34,197,94,.15);color:#86efac}
+.mc-f{border-color:#f59e0b;background:rgba(245,158,11,.2);color:#fcd34d}
+.regs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+.reg{background:var(--surf2);border:1.5px solid var(--border2);border-radius:6px;padding:5px 11px;font-family:'JetBrains Mono',monospace;font-size:12px}
+.rn{color:var(--dim);font-size:10px;display:block;margin-bottom:2px}
+.rv{color:var(--accent2);font-weight:700}
+.fin{margin-top:12px;background:rgba(245,158,11,.1);border:1.5px solid rgba(245,158,11,.35);border-radius:8px;padding:13px;text-align:center;font-size:16px;font-weight:800;color:#fcd34d}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!-- Tooltip managed entirely in vanilla JS — never causes React re-renders -->
+<div id="tip">
+  <div class="tn" id="tip-name"></div>
+  <div class="tc" id="tip-cat"></div>
+  <div class="tb" id="tip-body"></div>
+</div>
+
+<script>
+/* === VANILLA TOOLTIP — zero React involvement === */
+const TIP = document.getElementById('tip');
+const TN  = document.getElementById('tip-name');
+const TC  = document.getElementById('tip-cat');
+const TB  = document.getElementById('tip-body');
+
+function showTip(e, label, cat, body) {
+  TN.textContent = label;
+  TC.textContent = cat  || '';
+  TC.style.display = cat  ? 'block' : 'none';
+  TB.innerHTML    = body || '';
+  TB.style.display = body ? 'block' : 'none';
+  TIP.style.display = 'block';
+  placeTip(e.currentTarget);
+}
+
+function placeTip(el) {
+  const r  = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const above = r.top > window.innerHeight / 2;
+  TIP.style.left      = cx + 'px';
+  TIP.style.top       = (above ? r.top - 10 : r.bottom + 10) + 'px';
+  TIP.style.transform = above ? 'translate(-50%,-100%)' : 'translate(-50%,0)';
+}
+
+function hideTip() { TIP.style.display = 'none'; }
+
+/* Attach to any element: tip(el, label, cat, body) */
+function tipProps(label, cat, body) {
+  return {
+    onMouseEnter: e => showTip(e, label, cat, body),
+    onMouseLeave: hideTip,
+  };
+}
+</script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+/* === BLOCK METADATA === */
+const BM = {
+  ldr:    {c:'mn',label:'ldr',   cat:'Load Register',               body:'<code>LDR Rd, [Rn]</code> — load word from address in Rn<br><code>LDR Rd, =label</code> — load the <em>address</em> of label'},
+  ldrb:   {c:'mn',label:'ldrb',  cat:'Load Register Byte',          body:'Loads a single <strong>byte</strong> (zero-extended to 32 bits).<br><code>LDRB Rd, [Rn]</code>'},
+  ldrh:   {c:'mn',label:'ldrh',  cat:'Load Register Halfword',      body:'Loads a 16-bit halfword (zero-extended).<br><code>LDRH Rd, [Rn]</code>'},
+  ldrsh:  {c:'mn',label:'ldrsh', cat:'Load Register Signed Halfword',body:'Loads a 16-bit halfword and <strong>sign-extends</strong> to 32 bits.<br><code>LDRSH Rd, [Rn]</code>'},
+  str:    {c:'mn',label:'str',   cat:'Store Register',              body:'<code>STR Rt, [Rn]</code> — stores a 32-bit word to memory'},
+  strb:   {c:'mn',label:'strb',  cat:'Store Register Byte',         body:'Stores the lowest byte of Rt.<br><code>STRB Rt, [Rn]</code>'},
+  strh:   {c:'mn',label:'strh',  cat:'Store Register Halfword',     body:'Stores the lower 16 bits of Rt.<br><code>STRH Rt, [Rn]</code>'},
+  add:    {c:'mn',label:'add',   cat:'Add',                         body:'<code>ADD Rd, Rn, Rm</code> → Rd = Rn + Rm<br><code>ADD Rd, #imm</code> → Rd = Rd + imm'},
+  sub:    {c:'mn',label:'sub',   cat:'Subtract',                    body:'<code>SUB Rd, Rn, Rm</code> → Rd = Rn − Rm'},
+  mul:    {c:'mn',label:'mul',   cat:'Multiply',                    body:'<code>MUL Rd, Rn, Rm</code> → Rd = Rn × Rm<br>Both sources must be registers — no immediate.'},
+  mov:    {c:'mn',label:'mov',   cat:'Move',                        body:'<code>MOV Rd, #imm</code> or <code>MOV Rd, Rn</code>'},
+  mvn:    {c:'mn',label:'mvn',   cat:'Move NOT',                    body:'<code>MVN Rd, Rn</code> → Rd = bitwise NOT of Rn'},
+  and:    {c:'mn',label:'and',   cat:'Logical AND',                 body:'<code>AND Rd, Rn, Rm</code> → Rd = Rn &amp; Rm<br>Sets a bit only if both inputs have it.'},
+  eor:    {c:'mn',label:'eor',   cat:'Exclusive OR (XOR)',          body:'<code>EOR Rd, Rn, Rm</code> → Rd = Rn ^ Rm<br>Sets a bit if <em>exactly one</em> input has it.'},
+  orr:    {c:'mn',label:'orr',   cat:'Logical OR',                  body:'<code>ORR Rd, Rn, Rm</code> → Rd = Rn | Rm<br>Sets a bit if <em>at least one</em> input has it.'},
+  bic:    {c:'mn',label:'bic',   cat:'Bitwise Clear',               body:'<code>BIC Rd, Rn, Rm</code> → Rd = Rn &amp; ~Rm<br>Clears bits in Rn wherever Rm has a 1.'},
+  cmp:    {c:'mn',label:'cmp',   cat:'Compare',                     body:'Subtracts Operand2 from Rn, sets flags, discards result.<br>Always pair with a conditional branch.'},
+  cmn:    {c:'mn',label:'cmn',   cat:'Compare Negative',            body:'Flags set from Rn + Operand2.<br>Compares Rn against −Operand2.'},
+  tst:    {c:'mn',label:'tst',   cat:'Bitwise Test',                body:'Flags set from Rn AND Operand2.<br>Tests bits without modifying registers.'},
+  teq:    {c:'mn',label:'teq',   cat:'Test Equivalence',            body:'Flags set from Rn EOR Operand2.<br>Tests if two values are equal (like CMP but XOR).'},
+  ble:    {c:'mn',label:'ble',   cat:'Branch if ≤ (signed)',        body:'Jumps if last CMP ≤ 0. Flags: Z=1 OR N≠V'},
+  bne:    {c:'mn',label:'bne',   cat:'Branch if ≠',                 body:'Jumps if last CMP ≠ 0. Flag: Z=0'},
+  blt:    {c:'mn',label:'blt',   cat:'Branch if < (signed)',        body:'Jumps if last CMP < 0. Flags: N≠V'},
+  beq:    {c:'mn',label:'beq',   cat:'Branch if = (equal)',         body:'Jumps if last CMP = 0. Flag: Z=1'},
+  bge:    {c:'mn',label:'bge',   cat:'Branch if ≥ (signed)',        body:'Jumps if last CMP ≥ 0. Flags: N=V'},
+  bgt:    {c:'mn',label:'bgt',   cat:'Branch if > (signed)',        body:'Jumps if last CMP > 0. Flags: Z=0 AND N=V'},
+  bhi:    {c:'mn',label:'bhi',   cat:'Branch if Higher (unsigned)', body:'Jumps if higher unsigned. Flags: C=1 AND Z=0'},
+  bls:    {c:'mn',label:'bls',   cat:'Branch if Lower or Same',     body:'Jumps if lower/same unsigned. Flags: C=0 OR Z=1'},
+  b:      {c:'mn',label:'b',     cat:'Branch (unconditional)',      body:'Always jumps to label. No condition check.'},
+  r0: {c:'rg',label:'r0',cat:'General-purpose register',body:'32-bit. Conventional: return value / 1st argument.'},
+  r1: {c:'rg',label:'r1',cat:'General-purpose register',body:'32-bit. Conventional: 2nd argument.'},
+  r2: {c:'rg',label:'r2',cat:'General-purpose register',body:'32-bit. Conventional: 3rd argument.'},
+  r3: {c:'rg',label:'r3',cat:'General-purpose register',body:'32-bit.'},
+  r4: {c:'rg',label:'r4',cat:'General-purpose register',body:'32-bit. Callee-saved in ARM ABI.'},
+  r5: {c:'rg',label:'r5',cat:'General-purpose register',body:'32-bit. Callee-saved.'},
+  r6: {c:'rg',label:'r6',cat:'General-purpose register',body:'32-bit. Callee-saved.'},
+  r7: {c:'rg',label:'r7',cat:'General-purpose register',body:'32-bit. Callee-saved.'},
+  r8: {c:'rg',label:'r8',cat:'General-purpose register',body:'32-bit. Callee-saved.'},
+  '[r0]':     {c:'mm',label:'[r0]',    cat:'Register indirect', body:'Memory at address in r0. Like <code>*r0</code> in C.'},
+  '[r1]':     {c:'mm',label:'[r1]',    cat:'Register indirect', body:'Memory at address in r1.'},
+  '[r2]':     {c:'mm',label:'[r2]',    cat:'Register indirect', body:'Memory at address in r2.'},
+  '[r3]':     {c:'mm',label:'[r3]',    cat:'Register indirect', body:'Memory at address in r3 (array pointer).'},
+  '[r5]':     {c:'mm',label:'[r5]',    cat:'Register indirect', body:'Memory at address in r5 (sums pointer).'},
+  '[r0, #4]': {c:'mm',label:'[r0,+4]', cat:'Base + offset',     body:'Address = r0 + 4 bytes = one word past r0.'},
+  '[r0, #8]': {c:'mm',label:'[r0,+8]', cat:'Base + offset',     body:'Address = r0 + 8 bytes = two words past r0.'},
+  '[r5, #-4]':{c:'mm',label:'[r5,−4]', cat:'Base − offset',     body:'Address = r5 − 4 bytes.<br>When r5 → sums[i], this accesses sums[i−1].'},
+  '#0':    {c:'im',label:'#0',   cat:'Immediate value', body:'Constant 0.'},
+  '#1':    {c:'im',label:'#1',   cat:'Immediate value', body:'Constant 1.'},
+  '#2':    {c:'im',label:'#2',   cat:'Immediate value', body:'Constant 2.'},
+  '#4':    {c:'im',label:'#4',   cat:'Immediate value', body:'4 bytes = one 32-bit word. Add 4 to advance a pointer by one element.'},
+  '#8':    {c:'im',label:'#8',   cat:'Immediate value', body:'8 bytes = two words.'},
+  '#20':   {c:'im',label:'#20',  cat:'Immediate value', body:'20 — number of array elements.'},
+  '#21':   {c:'im',label:'#21',  cat:'Immediate value', body:'Loop boundary: CMP r2,#21 then BNE loops for values 1..20.'},
+  '#42':   {c:'im',label:'#42',  cat:'Immediate value', body:'Constant 42.'},
+  '#1000': {c:'im',label:'#1000',cat:'Immediate value', body:'Fibonacci threshold.'},
+  '=num1':  {c:'lb',label:'=num1', cat:'Pseudo-load: address', body:'Loads the <em>address</em> (not value) of <code>num1</code>.'},
+  '=array': {c:'lb',label:'=array',cat:'Pseudo-load: address', body:'Loads address of <code>array[0]</code>. Register becomes a pointer.'},
+  '=sums':  {c:'lb',label:'=sums', cat:'Pseudo-load: address', body:'Loads address of <code>sums[0]</code>.'},
+  loop:     {c:'lb',label:'loop',  cat:'Branch target', body:'Jumps to the <code>loop:</code> label.'},
+  loop2:    {c:'lb',label:'loop2', cat:'Branch target', body:'Jumps to the <code>loop2:</code> label.'},
+  '.word':  {c:'dr',label:'.word', cat:'Directive — allocate word',  body:'Allocates a 32-bit (4-byte) word, initialised to the given value.'},
+  '.skip':  {c:'dr',label:'.skip', cat:'Directive — reserve bytes',  body:'Reserves N bytes (zero-initialised).<br>20 elements × 4 bytes = 80.'},
+  '.byte':  {c:'dr',label:'.byte', cat:'Directive — allocate byte',  body:'Allocates a single 8-bit byte.'},
+  '.hword': {c:'dr',label:'.hword',cat:'Directive — allocate halfword',body:'Allocates a 16-bit halfword.'},
+  '.global':{c:'dr',label:'.global',cat:'Directive — export symbol', body:'Makes a label visible to the linker.'},
+  '.text':  {c:'dr',label:'.text', cat:'Directive — code section',   body:'Begins the code (text) section.'},
+  '.data':  {c:'dr',label:'.data', cat:'Directive — data section',   body:'Begins the data section — variable definitions go here.'},
+  '.equ':   {c:'dr',label:'.equ',  cat:'Directive — define constant',body:'<code>.equ NAME, value</code> — like #define in C.'},
+  '0x64': {c:'dv',label:'0x64',cat:'Data value (hex)', body:'0x64 = decimal 100. Initial value of num1.'},
+  '20':   {c:'dv',label:'20',  cat:'Data value',       body:'Decimal 20. Used as initial value.'},
+  '80':   {c:'dv',label:'80',  cat:'Data value',       body:'80 bytes = 20 × 4-byte words. Reserves space for a 20-element array.'},
+  '0':    {c:'dv',label:'0',   cat:'Data value',       body:'Zero — default/initial value.'},
+};
+
+const CC = {mn:'bl-mn',rg:'bl-rg',mm:'bl-mm',im:'bl-im',lb:'bl-lb',dr:'bl-dr',dv:'bl-dv'};
+const CAT_LABELS = {mn:'⚡ Instructions',rg:'📦 Registers',mm:'🗄 Memory',im:'🔢 Immediates',lb:'🏷 Labels',dr:'📋 Directives',dv:'📊 Data values'};
+
+/* === DATA HELPERS === */
+let _sid = 0;
+const sl = c => ({k:'slot',correct:c,id:`s${_sid++}`});
+const fx = t => ({k:'fx',text:t});
+const LI = (parts,intent='',ind=1) => ({kind:'instr',parts,intent,ind});
+const LD = (lbl,parts)             => ({kind:'data', dlabel:lbl, parts});
+const LF = (text,ind=0)            => ({kind:'fixed',text,ind});
+const LL = text                    => ({kind:'label',text});
+const LB = ()                      => ({kind:'blank'});
+
+/* === PROGRAMS === */
+const PROGRAMS = [
+{
+  id:'p1',title:'Program 1',sub:'Arithmetic',assessed:false,
+  desc:'Loads <strong>num1</strong> and <strong>num2</strong> from memory, adds them, and stores the result as <strong>num3</strong>. The three variables live in consecutive 4-byte slots — if r0 points to num1, then <code>[r0, #4]</code> is num2 and <code>[r0, #8]</code> is num3.',
+  lines:[
+    LF('.text'),LF('.global _start'),LF('_start:'),
+    LI([sl('ldr'),fx(' '),sl('r0'),fx(', '),sl('=num1')],  'r0 ← address of num1'),
+    LI([sl('ldr'),fx(' '),sl('r1'),fx(', '),sl('[r0]')],   'r1 ← value of num1'),
+    LI([sl('ldr'),fx(' '),sl('r2'),fx(', '),sl('[r0, #4]')],'r2 ← value of num2'),
+    LI([sl('add'),fx(' '),sl('r3'),fx(', '),sl('r1'),fx(', '),sl('r2')],'r3 ← r1 + r2'),
+    LI([sl('str'),fx(' '),sl('r3'),fx(', '),sl('[r0, #8]')],'store r3 as num3'),
+    LI([sl('ldr'),fx(' '),sl('r4'),fx(', '),sl('[r0, #8]')],'r4 ← num3'),
+    LF('    nop'),LB(),
+    LF('.data'),
+    LD('num1:',[sl('.word'),fx(' '),sl('0x64')]),
+    LD('num2:',[sl('.word'),fx(' '),sl('20')]),
+    LD('num3:',[sl('.word'),fx(' '),sl('0')]),
+  ],
+  palette:['ldr','ldrb','ldrsh','str','strb','add','sub','mul','and','orr','eor','bic','mov','mvn','r0','r1','r2','r3','r4','r5','=num1','=array','[r0]','[r1]','[r0, #4]','[r0, #8]','#0','#1','#4','#8','#20','.word','.skip','.byte','.global','.text','.data','0x64','20','80','0'],
+},{
+  id:'p2',title:'Program 2',sub:'Fibonacci',assessed:false,
+  desc:'Generates Fibonacci numbers until one exceeds 1000. Each new value = the sum of the previous two. Two registers form a <strong>sliding window</strong> that advances each iteration.',
+  lines:[
+    LF('.text'),LF('.global _start'),LF('_start:'),
+    LI([sl('mov'),fx(' '),sl('r0'),fx(', '),sl('#0')],'r0 ← 0'),
+    LI([sl('mov'),fx(' '),sl('r1'),fx(', '),sl('#1')],'r1 ← 1'),
+    LL('loop:'),
+    LI([sl('add'),fx(' '),sl('r2'),fx(', '),sl('r0'),fx(', '),sl('r1')],'r2 ← r0 + r1'),
+    LI([sl('mov'),fx(' '),sl('r0'),fx(', '),sl('r1')],'slide r0 ← r1'),
+    LI([sl('mov'),fx(' '),sl('r1'),fx(', '),sl('r2')],'slide r1 ← r2'),
+    LI([sl('cmp'),fx(' '),sl('r2'),fx(', '),sl('#1000')],'compare r2 with 1000'),
+    LI([sl('ble'),fx(' '),sl('loop')],'if ≤ 1000, repeat'),
+    LF('    nop'),
+  ],
+  palette:['mov','add','sub','mul','cmp','cmn','tst','teq','ble','bne','blt','beq','bge','bgt','bhi','bls','b','ldr','str','and','orr','eor','bic','r0','r1','r2','r3','r4','#0','#1','#2','#4','#20','#1000','loop','loop2'],
+},{
+  id:'p3',title:'Program 3',sub:'Array Init',assessed:false,
+  desc:'Fills a 20-element array with values 1 … 20. <strong>r1</strong> is a <em>pointer register</em> — it holds a memory address and advances by 4 bytes per iteration (one 32-bit element = one word).',
+  lines:[
+    LF('.text'),LF('.global _start'),LF('_start:'),
+    LI([sl('ldr'),fx(' '),sl('r1'),fx(', '),sl('=array')],'r1 ← &array[0]'),
+    LI([sl('mov'),fx(' '),sl('r2'),fx(', '),sl('#1')],'r2 ← 1'),
+    LL('loop:'),
+    LI([sl('str'),fx(' '),sl('r2'),fx(', '),sl('[r1]')],'write r2 at r1'),
+    LI([sl('add'),fx(' '),sl('r1'),fx(', '),sl('#4')],'advance pointer'),
+    LI([sl('add'),fx(' '),sl('r2'),fx(', '),sl('#1')],'r2++'),
+    LI([sl('cmp'),fx(' '),sl('r2'),fx(', '),sl('#21')],'written 20 values?'),
+    LI([sl('bne'),fx(' '),sl('loop')],'if not, repeat'),
+    LF('    nop'),LB(),
+    LF('.data'),
+    LD('array:',[sl('.skip'),fx(' '),sl('80')]),
+  ],
+  palette:['ldr','ldrb','str','strb','add','sub','mov','cmp','cmn','tst','bne','ble','blt','beq','b','and','orr','eor','bic','r0','r1','r2','r3','r4','=array','=sums','=num1','[r1]','[r2]','[r0]','#1','#2','#4','#8','#20','#21','loop','loop2','.word','.skip','.byte','.hword','.data','20','80','0','0x64'],
+},{
+  id:'p4',title:'Program 4',sub:'Running Sum ★',assessed:true,
+  desc:'Extend Program 3: after filling <code>array[]</code> with 1–20, compute a <strong>running cumulative sum</strong> into a second array <code>sums[]</code>.<br><br><code>sums[0] = array[0]</code><br><code>sums[i] = sums[i−1] + array[i]</code> &nbsp;for i = 1…19<br><br>Final value <code>sums[19]</code> must equal <strong>210</strong>.',
+  givenLines:[
+    LF('@ Program 3 (given) ─────────────────────────'),
+    LF('.text'),LF('.global _start'),LF('_start:'),
+    LF('    ldr r1, =array'),LF('    mov r2, #1'),
+    LL('loop:'),
+    LF('    str r2, [r1]'),LF('    add r1, #4'),
+    LF('    add r2, #1'),LF('    cmp r2, #21'),LF('    bne loop'),
+    LB(),LF('@ Your code ─────────────────────────────────'),
+  ],
+  lines:[
+    LI([sl('ldr'),fx(' '),sl('r3'),fx(', '),sl('=array')],''),
+    LI([sl('ldr'),fx(' '),sl('r5'),fx(', '),sl('=sums')], ''),
+    LI([sl('ldr'),fx(' '),sl('r4'),fx(', '),sl('[r3]')],  ''),
+    LI([sl('str'),fx(' '),sl('r4'),fx(', '),sl('[r5]')],  ''),
+    LI([sl('add'),fx(' '),sl('r3'),fx(', '),sl('#4')],    ''),
+    LI([sl('add'),fx(' '),sl('r5'),fx(', '),sl('#4')],    ''),
+    LI([sl('mov'),fx(' '),sl('r6'),fx(', '),sl('#1')],    ''),
+    LL('loop2:'),
+    LI([sl('ldr'),fx(' '),sl('r4'),fx(', '),sl('[r3]')],        ''),
+    LI([sl('ldr'),fx(' '),sl('r7'),fx(', '),sl('[r5, #-4]')],   ''),
+    LI([sl('add'),fx(' '),sl('r4'),fx(', '),sl('r4'),fx(', '),sl('r7')],''),
+    LI([sl('str'),fx(' '),sl('r4'),fx(', '),sl('[r5]')],        ''),
+    LI([sl('add'),fx(' '),sl('r3'),fx(', '),sl('#4')],          ''),
+    LI([sl('add'),fx(' '),sl('r5'),fx(', '),sl('#4')],          ''),
+    LI([sl('add'),fx(' '),sl('r6'),fx(', '),sl('#1')],          ''),
+    LI([sl('cmp'),fx(' '),sl('r6'),fx(', '),sl('#20')],         ''),
+    LI([sl('blt'),fx(' '),sl('loop2')],                         ''),
+    LF('    nop'),LB(),
+    LF('.data'),
+    LD('array:',[sl('.skip'),fx(' '),sl('80')]),
+    LD('sums:', [sl('.skip'),fx(' '),sl('80')]),
+  ],
+  palette:['ldr','ldrb','ldrsh','str','strb','add','sub','mul','and','orr','eor','bic','mov','mvn','cmp','cmn','tst','teq','blt','ble','bne','beq','bge','bgt','bhi','bls','b','r0','r1','r2','r3','r4','r5','r6','r7','r8','=array','=sums','=num1','[r3]','[r5]','[r1]','[r0]','[r0, #4]','[r5, #-4]','#0','#1','#4','#8','#20','#21','loop','loop2','.word','.skip','.byte','.hword','.data','20','80','0','0x64'],
+}];
+
+/* === MEMORY VIZ === */
+function MemViz() {
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const arr  = Array.from({length:20},(_,i)=>i+1);
+  const sums = arr.reduce((a,v,i)=>[...a,i===0?v:a[i-1]+v],[]);
+  useEffect(()=>{
+    if(!playing)return;
+    if(step>=42){setPlaying(false);return;}
+    const t=setTimeout(()=>setStep(s=>s+1),100);
+    return()=>clearTimeout(t);
+  },[playing,step]);
+  const arrV=Math.min(step,20), sumV=Math.max(0,step-22);
+  return(
+    <div className="mviz">
+      <div className="mviz-hd">
+        <div className="mviz-ttl">🧠 Memory Execution</div>
+        <button className="abtn" onClick={()=>{setStep(0);setPlaying(true);}}>
+          {playing?'⏸ Running…':'▶ Animate'}
+        </button>
+      </div>
+      {sumV>0&&<div className="regs">
+        {[['r3','array+'+(arrV*4)+'B'],['r5','sums+'+(sumV*4)+'B'],
+          ['r6',String(Math.max(1,sumV))],
+          ['r4',sumV>0?String(sums[Math.max(0,sumV-1)]):'—'],
+          ['r7',sumV>1?String(sums[Math.max(0,sumV-2)]):'—']].map(([n,v])=>(
+          <div key={n} className="reg"><span className="rn">{n}</span><span className="rv">{v}</span></div>
+        ))}
+      </div>}
+      <div className="albl">array[0…19]</div>
+      <div className="acells">{arr.map((v,i)=><div key={i} className={`mcell ${i<arrV?'mc-a':'mc-e'}`}><span className="ci">[{i}]</span>{i<arrV?v:''}</div>)}</div>
+      <div className="albl">sums[0…19] — running total</div>
+      <div className="acells">{sums.map((v,i)=>{const f=i<sumV,fin=i===19&&f;return<div key={i} className={`mcell ${fin?'mc-f':f?'mc-s':'mc-e'}`}><span className="ci">[{i}]</span>{f?v:''}</div>;})}</div>
+      {sumV>=20&&<div className="fin">🎉 sums[19] = 210 = 1+2+3+…+20 ✓</div>}
+    </div>
+  );
+}
+
+/* === SLOT component === */
+function Slot({slot, val, canDrop, tested, assessed, onClick}) {
+  const m   = val ? (BM[val]||{c:'mn',label:val,cat:'',body:''}) : null;
+  const isOk  = tested && !assessed && val === slot.correct;
+  const isBad = tested && !assessed && val && val !== slot.correct;
+  let cls = 'slot';
+  if (m)      cls += ' filled ' + CC[m.c];
+  if (canDrop && !m) cls += ' drop';
+  if (isOk)   cls += ' ok';
+  if (isBad)  cls += ' bad';
+  const label = m ? m.label : 'Empty slot';
+  const cat   = m ? m.cat   : '';
+  const body  = m ? m.body  : (canDrop ? 'Select a block, then click here to place it.' : 'Select a block from the palette first.');
+  return (
+    <span
+      className={cls}
+      style={{minWidth: m ? Math.max(58, val.length*10+16) : 58}}
+      onClick={onClick}
+      onMouseEnter={e => showTip(e, label, cat, body)}
+      onMouseLeave={hideTip}
+    >
+      {val || ''}
+    </span>
+  );
+}
+
+/* === CODE LINE === */
+function CodeLine({line, lnum, slots, canDrop, tested, assessed, showHints, onSlot}) {
+  if (line.kind==='blank') return <div className="line-row line-blank"/>;
+  if (line.kind==='fixed') return (
+    <div className="line-row" style={{paddingLeft:`${16+(line.ind||0)*26}px`}}>
+      <span className="lnum">{lnum}</span><span className="tfx">{line.text}</span>
+    </div>
+  );
+  if (line.kind==='label') return (
+    <div className="line-row"><span className="lnum">{lnum}</span><span className="tlbl">{line.text}</span></div>
+  );
+  if (line.kind==='data') return (
+    <div className="line-row" style={{paddingLeft:'16px'}}>
+      <span className="lnum">{lnum}</span>
+      <span className="tlbl" style={{marginRight:10}}>{line.dlabel}</span>
+      <span className="lbody">
+        {line.parts.map((p,pi)=>p.k==='fx'
+          ?<span key={pi} className="tsep">{p.text}</span>
+          :<Slot key={p.id} slot={p} val={slots[p.id]} canDrop={canDrop} tested={tested} assessed={assessed} onClick={()=>onSlot(p.id)}/>
+        )}
+      </span>
+    </div>
+  );
+  return (
+    <div className="line-row" style={{paddingLeft:`${16+(line.ind||0)*26}px`}}>
+      <span className="lnum">{lnum}</span>
+      <span className="lbody">
+        {line.parts.map((p,pi)=>p.k==='fx'
+          ?<span key={pi} className="tsep">{p.text}</span>
+          :<Slot key={p.id} slot={p} val={slots[p.id]} canDrop={canDrop} tested={tested} assessed={assessed} onClick={()=>onSlot(p.id)}/>
+        )}
+      </span>
+      {showHints && line.intent && (
+        <span className="intent-col">
+          <span className="intent-pill"><span style={{opacity:.5}}>→</span>{line.intent}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* === PALETTE BLOCK — uses vanilla tip, no React context === */
+function PalBlock({name, selected, onClick}) {
+  const m = BM[name] || {c:'mn',label:name,cat:'',body:''};
+  return (
+    <span
+      className={`pbl ${CC[m.c]} ${selected?'sel':''}`}
+      onClick={onClick}
+      onMouseEnter={e => showTip(e, m.label, m.cat, m.body)}
+      onMouseLeave={hideTip}
+    >
+      {name}
+    </span>
+  );
+}
+
+/* === PALETTE PANEL === */
+function Palette({blocks, selected, onPick}) {
+  const groups = {};
+  const order  = ['mn','rg','mm','im','lb','dr','dv'];
+  blocks.forEach(b => { const c=BM[b]?.c||'mn'; (groups[c]=groups[c]||[]).push(b); });
+  return (
+    <div className="pal-panel">
+      <div className="pal-hint"><strong>Select</strong> a block, then click an empty slot to place it. Click a filled slot to clear it. <strong>Hover</strong> any block for details.</div>
+      {order.filter(c=>groups[c]).map(c=>(
+        <div key={c}>
+          <div className="cat-head">{CAT_LABELS[c]}</div>
+          <div className="cat-blks">
+            {groups[c].map(b=>(
+              <PalBlock key={b} name={b} selected={selected===b} onClick={()=>onPick(b)}/>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* === PROGRAM VIEW === */
+function ProgramView({prog}) {
+  const [slots,    setSlots]    = useState({});
+  const [picked,   setPicked]   = useState(null);
+  const [tested,   setTested]   = useState(false);
+  const [showHints,setShowHints]= useState(false);
+  const [vizShow,  setVizShow]  = useState(false);
+
+  const allSlots = prog.lines
+    .flatMap(l=>(l.kind==='instr'||l.kind==='data')?l.parts.filter(p=>p.k==='slot'):[]);
+
+  const handlePick  = b  => setPicked(p=>p===b?null:b);
+  const handleSlot  = id => {
+    if (picked) setSlots(s=>({...s,[id]:picked}));
+    else        setSlots(s=>{const n={...s};delete n[id];return n;});
+    setTested(false);
+  };
+  const handleTest  = () => { setTested(true); if(prog.assessed) setVizShow(true); };
+  const handleReset = () => { setSlots({}); setPicked(null); setTested(false); setVizShow(false); };
+
+  const filled  = allSlots.filter(s=>slots[s.id]).length;
+  const correct = allSlots.filter(s=>slots[s.id]===s.correct).length;
+  const total   = allSlots.length;
+  const allOk   = correct===total && filled===total;
+  let lnum = 1;
+
+  return (
+    <div className="prog-view">
+      <div className="prog-body">
+        <div className="code-panel">
+          <div className="goal-box" dangerouslySetInnerHTML={{__html:prog.desc}}/>
+          <div className="code-hdr">
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:16,fontWeight:800}}>Assembly</span>
+              <span style={{fontSize:13,color:'var(--dim)'}}>— place the blocks</span>
+            </div>
+            {!prog.assessed && (
+              <div className={`hint-btn ${showHints?'on':''}`} onClick={()=>setShowHints(h=>!h)}>
+                {showHints?'🔆 Hints on':'💡 Show hints'}
+              </div>
+            )}
+          </div>
+          <div className="code-card">
+            <div className="card-bar">
+              <div className="dot" style={{background:'#ff5f57'}}/>
+              <div className="dot" style={{background:'#febc2e'}}/>
+              <div className="dot" style={{background:'#28c840'}}/>
+              <span style={{marginLeft:8}}>{prog.id}.s</span>
+              {picked && <span style={{marginLeft:'auto',color:'var(--accent2)',fontWeight:700,fontSize:14}}>● placing: {picked}</span>}
+            </div>
+            {(prog.givenLines||[]).map((line,i)=>(
+              <div key={`g${i}`} className="line-given">
+                <CodeLine line={line} lnum={lnum++} slots={{}} canDrop={false} tested={false} assessed={false} showHints={false} onSlot={()=>{}}/>
+              </div>
+            ))}
+            {prog.lines.map((line,i)=>(
+              <CodeLine key={i} line={line} lnum={lnum++}
+                slots={slots} canDrop={!!picked} tested={tested}
+                assessed={prog.assessed} showHints={showHints} onSlot={handleSlot}/>
+            ))}
+          </div>
+          {prog.assessed && vizShow && <MemViz key={`v${vizShow}`}/>}
+        </div>
+        <Palette blocks={prog.palette} selected={picked} onPick={handlePick}/>
+      </div>
+      <div className="bbar">
+        <button className="btn btn-t" onClick={handleTest}>🧪 Test</button>
+        <button className="btn btn-r" onClick={handleReset}>↺ Reset</button>
+        {tested && !prog.assessed && (
+          <div className={`rmsg ${allOk?'c-ok':'c-err'}`}>
+            {allOk?'✅ All correct!':'❌ '+correct+'/'+total+' correct — red = wrong block'}
+          </div>
+        )}
+        {tested && prog.assessed && <div className="rmsg c-info">📊 Does sums[19] = 210?</div>}
+        <div className="scnt">{filled}/{total} slots filled</div>
+      </div>
+    </div>
+  );
+}
+
+/* === APP === */
+function App() {
+  const [tab, setTab] = useState(0);
+  return (
+    <div style={{height:'100vh',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div className="header">
+        <div className="hlogo">🔧</div>
+        <div>
+          <div className="htitle">ARM Assembly Block Builder</div>
+          <div className="hsub">Introduction to Computer Systems · Lab 2 · ARMv7</div>
+        </div>
+        <div style={{marginLeft:'auto',fontSize:13,color:'var(--dim)',textAlign:'right',lineHeight:1.65}}>
+          Click block → click slot to place<br/>Hover any block for description
+        </div>
+      </div>
+      <div className="tabs">
+        {PROGRAMS.map((p,i)=>(
+          <div key={p.id} className={`tab ${tab===i?'active':''}`} onClick={()=>setTab(i)}>
+            {p.title}
+            <span style={{fontSize:11,color:'var(--dim)',fontWeight:400}}>{p.sub}</span>
+            {p.assessed && <span className="badge-a">ASSESSED</span>}
+          </div>
+        ))}
+      </div>
+      <ProgramView key={PROGRAMS[tab].id} prog={PROGRAMS[tab]}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
