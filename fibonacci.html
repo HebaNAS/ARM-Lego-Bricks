@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Fibonacci — ARM Assembly Visualiser</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  /* Accessible palette — WCAG AA, colorblind-safe (deuteranopia/protanopia safe) */
+  /* Core background */
+  --bg:#07090f;
+  --surf:#0e1220;
+  --surf2:#141827;
+  --surf3:#1b2135;
+  --border:#232c44;
+  --border2:#2e3a58;
+  /* Text */
+  --text:#e8edf8;
+  --dim:#7a8aaa;
+  --dim2:#3e4e70;
+  /* Semantic — blue-orange axis (safe for all colorblind types) */
+  --blue:#4da6ff;     /* primary accent */
+  --blue2:#1a7fff;
+  --blue3:#8ccfff;
+  --orange:#ff9500;   /* secondary accent */
+  --orange2:#cc7800;
+  --orange3:#ffc266;
+  /* State colours — distinguishable without relying on hue alone */
+  --active:#4da6ff;   /* blue = executing */
+  --done:#546e8a;     /* muted = past */
+  --future:#2a3450;   /* dark = future */
+  --highlight:#ffe066; /* yellow = changed value */
+  --branch-yes:#4da6ff;
+  --branch-no:#ff9500;
+  /* Register window colours */
+  --win-r0:#ff9500;   /* orange — r0 */
+  --win-r1:#4da6ff;   /* blue  — r1 */
+  --win-r2:#ffe066;   /* yellow — r2 (result) */
+}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Share Tech Mono',monospace;
+  background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;
+  background-image:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.12) 2px,rgba(0,0,0,.12) 4px);
+}
+
+/* ── HEADER ── */
+.header{flex-shrink:0;background:var(--surf);border-bottom:1px solid var(--border2);padding:10px 22px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Orbitron',monospace;font-size:16px;font-weight:900;color:var(--orange);letter-spacing:.1em}
+.logo span{color:var(--blue)}
+.subtitle{font-size:11px;color:var(--dim);margin-top:2px;letter-spacing:.12em}
+.controls{display:flex;align-items:center;gap:10px}
+.btn{padding:7px 16px;border:1px solid var(--border2);border-radius:4px;background:var(--surf2);color:var(--orange);font-family:'Orbitron',monospace;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.08em;transition:all .15s}
+.btn:hover{background:var(--surf3);border-color:var(--orange);box-shadow:0 0 8px rgba(255,149,0,.3)}
+.btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+.btn-play{color:var(--blue);border-color:var(--blue2);background:rgba(77,166,255,.06)}
+.btn-play:hover{background:rgba(77,166,255,.12);box-shadow:0 0 8px rgba(77,166,255,.3)}
+.btn-reset{color:var(--orange3);border-color:var(--orange2)}
+.speed-wrap{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+input[type=range]{accent-color:var(--blue);width:80px;cursor:pointer}
+.step-counter{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surf);min-width:90px;text-align:center}
+
+/* ── MAIN GRID ── */
+.main{display:grid;grid-template-columns:255px 1fr 300px;flex:1;overflow:hidden;gap:1px;background:var(--border)}
+.panel{background:var(--surf);overflow:hidden;display:flex;flex-direction:column}
+.panel-head{padding:8px 14px;background:var(--surf2);border-bottom:1px solid var(--border);font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:.15em;color:var(--dim);display:flex;align-items:center;gap:8px}
+.panel-dot{width:7px;height:7px;border-radius:50%}
+.panel-body{flex:1;overflow-y:auto;padding:10px 0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+
+/* ── CODE ── */
+.code-line{display:flex;align-items:center;padding:3px 14px;font-size:13.5px;line-height:1.7;transition:background .15s;cursor:default;position:relative}
+.code-line.active{background:rgba(77,166,255,.1)}
+.code-line.active::before{content:'▶';position:absolute;left:4px;color:var(--blue);font-size:10px;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.code-line.done{opacity:.4}
+.code-line.future{opacity:.28}
+.ln{width:22px;text-align:right;color:var(--dim2);font-size:11px;margin-right:12px;flex-shrink:0}
+.mnemonic{color:var(--orange);font-weight:700}
+.reg-c{color:var(--blue3)}
+.imm-c{color:var(--highlight)}
+.lbl-c{color:#c0aaff;font-weight:700}
+.comment-c{color:var(--dim);font-size:12px;margin-left:8px}
+.directive-c{color:var(--dim)}
+.separator{border:none;border-top:1px solid var(--border);margin:4px 14px}
+
+/* ── CPU PANEL ── */
+.cpu-inner{padding:12px 14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+
+/* ── SLIDING WINDOW REGISTERS ── */
+.sw-title{font-family:'Orbitron',monospace;font-size:9.5px;letter-spacing:.15em;color:var(--dim);margin-bottom:8px}
+.sw-outer{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:14px 12px;display:flex;flex-direction:column;gap:12px}
+
+/* The history track */
+.sw-track-wrap{position:relative;overflow:hidden}
+.sw-track{display:flex;align-items:center;gap:4px;min-height:52px;position:relative;padding:4px 0}
+.sw-cell{
+  flex-shrink:0;width:54px;height:44px;
+  border:1.5px solid var(--border2);border-radius:5px;
+  background:var(--surf3);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-family:'Orbitron',monospace;
+  transition:all .3s;
+  position:relative;
+}
+.sw-cell.r0-cell{
+  border-color:var(--win-r0);
+  background:rgba(255,149,0,.12);
+  box-shadow:0 0 0 2px rgba(255,149,0,.25),inset 0 0 8px rgba(255,149,0,.08);
+}
+.sw-cell.r1-cell{
+  border-color:var(--win-r1);
+  background:rgba(77,166,255,.12);
+  box-shadow:0 0 0 2px rgba(77,166,255,.25),inset 0 0 8px rgba(77,166,255,.08);
+}
+.sw-cell.r2-cell{
+  border-color:var(--win-r2);
+  background:rgba(255,224,102,.1);
+  box-shadow:0 0 0 2px rgba(255,224,102,.25),inset 0 0 8px rgba(255,224,102,.08);
+}
+.sw-cell.dim-cell{opacity:.28}
+.sw-cell.new-cell{animation:cellPop .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes cellPop{0%{transform:scale(0.5) translateY(8px);opacity:0}100%{transform:scale(1) translateY(0);opacity:1}}
+.sw-cell-label{font-size:8.5px;letter-spacing:.08em;font-weight:700}
+.sw-cell-label.l-r0{color:var(--win-r0)}
+.sw-cell-label.l-r1{color:var(--win-r1)}
+.sw-cell-label.l-r2{color:var(--win-r2)}
+.sw-cell-label.l-dim{color:var(--dim2)}
+.sw-cell-val{font-size:15px;font-weight:700;color:var(--text)}
+.sw-cell.r0-cell .sw-cell-val{color:var(--orange3)}
+.sw-cell.r1-cell .sw-cell-val{color:var(--blue3)}
+.sw-cell.r2-cell .sw-cell-val{color:var(--highlight)}
+
+/* Arrow connectors */
+.sw-arrow{font-size:16px;color:var(--dim2);flex-shrink:0;line-height:1;align-self:center}
+.sw-plus{font-family:'Orbitron',monospace;font-size:16px;color:var(--highlight);font-weight:900;flex-shrink:0;align-self:center}
+.sw-eq{font-family:'Orbitron',monospace;font-size:16px;color:var(--highlight);font-weight:900;flex-shrink:0;align-self:center;opacity:.7}
+
+/* Register summary row */
+.sw-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sw-reg{background:var(--surf3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center}
+.sw-reg-name{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;margin-bottom:4px}
+.sw-reg.sr0 .sw-reg-name{color:var(--win-r0)}
+.sw-reg.sr1 .sw-reg-name{color:var(--win-r1)}
+.sw-reg.sr2 .sw-reg-name{color:var(--win-r2)}
+.sw-reg-val{font-size:18px;font-weight:700;font-family:'Orbitron',monospace;color:var(--text);min-height:28px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.sw-reg-val.changed{animation:valFlash .4s ease}
+@keyframes valFlash{0%{color:#fff;transform:scale(1.15)}100%{color:var(--text);transform:scale(1)}}
+.sw-reg-sub{font-size:10px;color:var(--dim);margin-top:2px}
+
+/* Sliding progress indicator */
+.sw-formula{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:8px 10px;background:var(--surf3);border-radius:6px;border:1px solid var(--border);
+  font-size:13px;font-family:'Orbitron',monospace;font-weight:700;
+}
+.sw-formula .fr0{color:var(--win-r0)}
+.sw-formula .fr1{color:var(--win-r1)}
+.sw-formula .fr2{color:var(--win-r2)}
+.sw-formula .fop{color:var(--dim)}
+
+/* FLAGS */
+.flags-block{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.flags-title{font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:.15em;margin-bottom:10px}
+.flags-row{display:flex;gap:8px;justify-content:center}
+.flag{width:50px;height:50px;border-radius:6px;border:1.5px solid var(--border2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:var(--surf);transition:all .3s}
+.flag.set{background:rgba(77,166,255,.12);border-color:var(--blue);box-shadow:0 0 8px rgba(77,166,255,.3)}
+.flag-name{font-size:15px;font-weight:700;color:var(--dim2);font-family:'Orbitron',monospace}
+.flag.set .flag-name{color:var(--blue3)}
+.flag-val{font-size:11px;color:var(--dim2)}
+.flag.set .flag-val{color:var(--blue)}
+
+/* EXPLAIN */
+.explain-block{background:var(--surf2);border:1px solid var(--border2);border-left:3px solid var(--blue);border-radius:0 6px 6px 0;padding:10px 12px;font-size:12.5px;line-height:1.65;min-height:60px}
+.explain-title{font-size:9.5px;letter-spacing:.12em;color:var(--dim);margin-bottom:5px;font-family:'Orbitron',monospace}
+.explain-asm{color:var(--orange);font-size:13px;font-weight:700;margin-bottom:5px}
+.explain-desc{color:var(--dim)}
+.explain-desc strong{color:var(--orange3)}
+.branch-yes{color:var(--blue);font-size:11.5px;margin-top:5px;font-weight:700}
+.branch-no {color:var(--orange);font-size:11.5px;margin-top:5px;font-weight:700}
+
+/* ── SEQUENCE PANEL ── */
+.seq-inner{padding:12px 14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;height:100%}
+.prog-wrap{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px}
+.prog-label{font-family:'Orbitron',monospace;font-size:9.5px;color:var(--dim);letter-spacing:.12em;margin-bottom:8px;display:flex;justify-content:space-between}
+.prog-track{height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--blue2),var(--blue3));border-radius:4px;width:0;transition:width .4s ease}
+.tape-wrap{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px}
+.tape-label{font-family:'Orbitron',monospace;font-size:9.5px;color:var(--dim);letter-spacing:.12em;margin-bottom:8px}
+.tape{display:flex;flex-wrap:wrap;gap:5px}
+.tape-num{padding:4px 8px;border:1px solid var(--border2);border-radius:4px;font-size:12.5px;font-weight:700;color:var(--dim2);background:var(--surf);transition:all .35s;font-family:'Orbitron',monospace}
+.tape-num.visible{color:var(--blue3);border-color:var(--blue2);background:rgba(77,166,255,.07)}
+.tape-num.new{animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popIn{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
+.tape-num.final{color:var(--highlight);border-color:var(--orange);background:rgba(255,224,102,.08)}
+.chart-wrap{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px;flex:1;min-height:140px}
+.chart-label{font-family:'Orbitron',monospace;font-size:9.5px;color:var(--dim);letter-spacing:.12em;margin-bottom:8px}
+.chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding-top:4px}
+.bar-wrap{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0}
+.bar{width:100%;background:linear-gradient(180deg,var(--blue3),var(--blue2));border-radius:3px 3px 0 0;height:0;transition:height .5s cubic-bezier(.34,1.2,.64,1);min-width:8px}
+.bar.active-bar{background:linear-gradient(180deg,#fff,var(--orange3));box-shadow:0 0 10px rgba(255,149,0,.5)}
+.bar.final-bar{background:linear-gradient(180deg,var(--highlight),var(--orange));box-shadow:0 0 10px rgba(255,224,102,.4)}
+.bar-lbl{font-size:8px;color:var(--dim2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}
+.spiral-wrap{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px}
+.spiral-label{font-family:'Orbitron',monospace;font-size:9.5px;color:var(--dim);letter-spacing:.12em;margin-bottom:6px}
+canvas{display:block;width:100%;border-radius:4px}
+/* DONE BANNER */
+.done-banner{position:absolute;inset:0;background:rgba(7,9,15,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:10;opacity:0;pointer-events:none;transition:opacity .4s}
+.done-banner.show{opacity:1;pointer-events:all}
+.done-title{font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:var(--blue3);letter-spacing:.1em}
+.done-val{font-family:'Orbitron',monospace;font-size:15px;color:var(--highlight)}
+.done-sub{font-size:13px;color:var(--dim);margin-top:4px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="logo">ARM <span>FIBONACCI</span> VISUALISER</div>
+    <div class="subtitle">ARMv7 · SLIDING WINDOW REGISTERS · LIVE TRACE</div>
+  </div>
+  <div class="controls">
+    <div class="step-counter" id="stepCounter">STEP 0 / 0</div>
+    <button class="btn" id="btnBack" onclick="stepBack()">◀ BACK</button>
+    <button class="btn" id="btnStep" onclick="stepFwd()">STEP ▶</button>
+    <button class="btn btn-play" id="btnPlay" onclick="togglePlay()">▶ PLAY</button>
+    <div class="speed-wrap">SPEED <input type="range" id="speedSlider" min="1" max="10" value="5" oninput="updateSpeed()"></div>
+    <button class="btn btn-reset" onclick="reset()">⟳ RESET</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: CODE -->
+  <div class="panel">
+    <div class="panel-head"><div class="panel-dot" style="background:var(--orange)"></div> PROGRAM CODE</div>
+    <div class="panel-body" id="codeBody"></div>
+  </div>
+
+  <!-- MIDDLE: CPU -->
+  <div class="panel">
+    <div class="panel-head"><div class="panel-dot" style="background:var(--blue)"></div> CPU STATE</div>
+    <div class="cpu-inner" id="cpuInner">
+
+      <!-- SLIDING WINDOW -->
+      <div class="sw-outer">
+        <div class="sw-title">SLIDING WINDOW — REGISTER HISTORY</div>
+
+        <!-- Visual track -->
+        <div class="sw-track-wrap">
+          <div class="sw-track" id="swTrack">
+            <!-- cells injected by JS -->
+          </div>
+        </div>
+
+        <!-- Formula -->
+        <div class="sw-formula">
+          <span class="fr0" id="fR0">R0=—</span>
+          <span class="fop">+</span>
+          <span class="fr1" id="fR1">R1=—</span>
+          <span class="fop">=</span>
+          <span class="fr2" id="fR2">R2=—</span>
+        </div>
+
+        <!-- Summary row -->
+        <div class="sw-summary">
+          <div class="sw-reg sr0">
+            <div class="sw-reg-name">R0</div>
+            <div class="sw-reg-val" id="sr0val">—</div>
+            <div class="sw-reg-sub">prev–1</div>
+          </div>
+          <div class="sw-reg sr1">
+            <div class="sw-reg-name">R1</div>
+            <div class="sw-reg-val" id="sr1val">—</div>
+            <div class="sw-reg-sub">prev</div>
+          </div>
+          <div class="sw-reg sr2">
+            <div class="sw-reg-name">R2</div>
+            <div class="sw-reg-val" id="sr2val">—</div>
+            <div class="sw-reg-sub">current</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FLAGS -->
+      <div class="flags-block">
+        <div class="flags-title">CONDITION FLAGS (CPSR) — set by CMP</div>
+        <div class="flags-row">
+          <div class="flag" id="flagN"><div class="flag-name">N</div><div class="flag-val">neg</div></div>
+          <div class="flag" id="flagZ"><div class="flag-name">Z</div><div class="flag-val">zero</div></div>
+          <div class="flag" id="flagC"><div class="flag-name">C</div><div class="flag-val">carry</div></div>
+          <div class="flag" id="flagV"><div class="flag-name">V</div><div class="flag-val">ovfl</div></div>
+        </div>
+      </div>
+
+      <!-- EXPLAIN -->
+      <div class="explain-block">
+        <div class="explain-title">CURRENT INSTRUCTION</div>
+        <div class="explain-asm" id="explainAsm">—</div>
+        <div class="explain-desc" id="explainDesc">Press STEP or PLAY to begin execution.</div>
+        <div id="explainBranch"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT: SEQUENCE -->
+  <div class="panel" style="position:relative">
+    <div class="panel-head"><div class="panel-dot" style="background:var(--highlight)"></div> FIBONACCI SEQUENCE</div>
+    <div class="seq-inner">
+      <div class="prog-wrap">
+        <div class="prog-label"><span>LOOP PROGRESS</span><span id="progText">0 / 17</span></div>
+        <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+      </div>
+      <div class="tape-wrap">
+        <div class="tape-label">GENERATED NUMBERS</div>
+        <div class="tape" id="numberTape"></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-label">VALUE GROWTH (log scale)</div>
+        <div class="chart" id="barChart"></div>
+      </div>
+      <div class="spiral-wrap">
+        <div class="spiral-label">FIBONACCI SPIRAL</div>
+        <canvas id="spiralCanvas" height="120"></canvas>
+      </div>
+    </div>
+    <div class="done-banner" id="doneBanner">
+      <div class="done-title">✓ COMPLETE</div>
+      <div class="done-val" id="doneVal"></div>
+      <div class="done-sub">First Fibonacci number &gt; 1000</div>
+      <button class="btn btn-reset" style="margin-top:10px" onclick="reset()">⟳ RESET</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   EXECUTION TRACE
+══════════════════════════════════════════ */
+const LINES = [
+  {id:'dir1',type:'directive',text:'.text'},
+  {id:'dir2',type:'directive',text:'.global _start'},
+  {id:'lab1',type:'label',    text:'_start:'},
+  {id:'i0',  type:'instr',    text:'mov r0, #0',    asm:'mov r0, #0',     desc:'Load constant <strong>0</strong> into R0. R0 will hold the first Fibonacci seed.'},
+  {id:'i1',  type:'instr',    text:'mov r1, #1',    asm:'mov r1, #1',     desc:'Load constant <strong>1</strong> into R1. R1 holds the second Fibonacci seed.'},
+  {id:'lab2',type:'label',    text:'loop:'},
+  {id:'i2',  type:'instr',    text:'add r2, r0, r1',asm:'add r2, r0, r1', desc:'<strong>R2 = R0 + R1</strong> — compute the next Fibonacci number by summing the window.'},
+  {id:'i3',  type:'instr',    text:'mov r0, r1',    asm:'mov r0, r1',     desc:'<strong>R0 = R1</strong> — slide the window: R1 becomes the new "older" value.'},
+  {id:'i4',  type:'instr',    text:'mov r1, r2',    asm:'mov r1, r2',     desc:'<strong>R1 = R2</strong> — slide the window: the newly computed number enters the window.'},
+  {id:'i5',  type:'instr',    text:'cmp r2, #1000', asm:'cmp r2, #1000',  desc:'<strong>Compare R2 against 1000.</strong> Computes R2 − 1000 and sets N, Z, C, V flags. Result discarded.'},
+  {id:'i6',  type:'instr',    text:'ble loop',      asm:'ble loop',       desc:'<strong>Branch if Less or Equal (Z=1 or N≠V).</strong> If R2 ≤ 1000, jump back to loop: for the next iteration.'},
+  {id:'sep', type:'sep'},
+  {id:'i7',  type:'instr',    text:'nop',           asm:'nop',            desc:'<strong>No Operation.</strong> Program halts here. R2 holds the first Fibonacci number exceeding 1000.'},
+];
+
+function buildTrace() {
+  const steps=[];
+  const push=(lineId,r0,r1,r2,flags,seqLen,branch)=>steps.push({lineId,r0,r1,r2,flags,seqLen,branch});
+  const F0={N:0,Z:0,C:0,V:0};
+  let r0=null,r1=null,r2=null,flags=F0,seqLen=0;
+  push('dir1',r0,r1,r2,flags,seqLen,false);
+  push('dir2',r0,r1,r2,flags,seqLen,false);
+  push('lab1',r0,r1,r2,flags,seqLen,false);
+  r0=0;push('i0',r0,r1,r2,flags,seqLen,false);
+  r1=1;push('i1',r0,r1,r2,flags,seqLen,false);
+  while(true){
+    push('lab2',r0,r1,r2,flags,seqLen,false);
+    r2=r0+r1;seqLen++;
+    push('i2',r0,r1,r2,flags,seqLen,false);
+    r0=r1;push('i3',r0,r1,r2,flags,seqLen,false);
+    r1=r2;push('i4',r0,r1,r2,flags,seqLen,false);
+    const diff=r2-1000;
+    flags={N:diff<0?1:0,Z:diff===0?1:0,C:r2>=1000?1:0,V:0};
+    push('i5',r0,r1,r2,flags,seqLen,false);
+    const branch=r2<=1000;
+    push('i6',r0,r1,r2,flags,seqLen,branch);
+    if(!branch)break;
+  }
+  push('sep',r0,r1,r2,flags,seqLen,false);
+  push('i7',r0,r1,r2,flags,seqLen,false);
+  return steps;
+}
+const TRACE=buildTrace();
+const SEQ_VALUES=[];
+TRACE.filter(s=>s.lineId==='i2').forEach(s=>SEQ_VALUES.push(s.r2));
+const MAX_VAL=Math.max(...SEQ_VALUES);
+
+/* Window history — store [r0,r1] pairs at each i2 step */
+const WIN_HISTORY=[];
+TRACE.filter(s=>s.lineId==='i2').forEach(s=>WIN_HISTORY.push({r0:s.r0,r1:s.r1,r2:s.r2}));
+
+/* ══════════════════════════════════════════
+   STATE
+══════════════════════════════════════════ */
+let currentStep=-1,playTimer=null,playSpeed=600;
+let prevR0=null,prevR1=null,prevR2=null;
+
+function updateSpeed(){
+  const v=parseInt(document.getElementById('speedSlider').value);
+  playSpeed=Math.round(1400-v*120);
+  if(playTimer){clearInterval(playTimer);playTimer=setInterval(stepFwd,playSpeed);}
+}
+
+/* ══════════════════════════════════════════
+   BUILD UI
+══════════════════════════════════════════ */
+function buildCodeListing(){
+  const body=document.getElementById('codeBody');
+  body.innerHTML='';
+  LINES.forEach((line,i)=>{
+    if(line.type==='sep'){const hr=document.createElement('hr');hr.className='separator';body.appendChild(hr);return;}
+    const row=document.createElement('div');
+    row.className='code-line future';
+    row.id='cline-'+line.id;
+    let html='<span class="ln">'+(i+1)+'</span>';
+    if(line.type==='directive') html+='<span class="directive-c">'+line.text+'</span>';
+    else if(line.type==='label') html+='<span class="lbl-c">'+line.text+'</span>';
+    else{
+      html+=line.text
+        .replace(/^(\w+)/,'<span class="mnemonic">$1</span>')
+        .replace(/\b(r\d)\b/g,'<span class="reg-c">$1</span>')
+        .replace(/(#[\d]+)/g,'<span class="imm-c">$1</span>')
+        .replace(/\b(loop)\b/g,'<span class="lbl-c">$1</span>');
+    }
+    row.innerHTML=html;
+    body.appendChild(row);
+  });
+}
+
+function buildTape(){
+  const tape=document.getElementById('numberTape');
+  tape.innerHTML='';
+  SEQ_VALUES.forEach((v,i)=>{
+    const span=document.createElement('span');
+    span.className='tape-num';span.id='tnum-'+i;span.textContent=v;
+    tape.appendChild(span);
+  });
+}
+
+function buildBars(){
+  const chart=document.getElementById('barChart');
+  chart.innerHTML='';
+  SEQ_VALUES.forEach((v,i)=>{
+    const wrap=document.createElement('div');wrap.className='bar-wrap';
+    const bar=document.createElement('div');bar.className='bar';bar.id='bar-'+i;
+    const lbl=document.createElement('div');lbl.className='bar-lbl';lbl.textContent=v;
+    wrap.appendChild(bar);wrap.appendChild(lbl);
+    chart.appendChild(wrap);
+  });
+}
+
+/* ══════════════════════════════════════════
+   SLIDING WINDOW TRACK RENDERER
+══════════════════════════════════════════ */
+const WINDOW_VISIBLE = 5; // cells to show
+
+function renderSlidingWindow(seqLen, r0, r1, r2, lineId) {
+  const track = document.getElementById('swTrack');
+  track.innerHTML = '';
+
+  // Build history up to current point
+  const histCount = Math.min(seqLen, WIN_HISTORY.length);
+  // We want to show last WINDOW_VISIBLE numbers from sequence + the current r2 if just computed
+  
+  const isComputing = lineId === 'i2';
+  const hasR2 = r2 !== null && seqLen > 0;
+
+  // Collect what values to show as cells
+  // Show: ...older... | r0-cell | r1-cell | [r2-cell if computed]
+  const values = []; // {val, role: 'old'|'r0'|'r1'|'r2'|'init'}
+  
+  if (r0 === null && r1 === null) {
+    // Before execution — show placeholder
+    const ph = document.createElement('div');
+    ph.style.cssText='color:var(--dim2);font-size:12px;padding:14px;width:100%;text-align:center';
+    ph.textContent='awaiting execution…';
+    track.appendChild(ph);
+    return;
+  }
+
+  // Build the window from WIN_HISTORY
+  const maxIdx = histCount - 1;
+  
+  // Decide which window entries to show (up to WINDOW_VISIBLE)
+  const startIdx = Math.max(0, maxIdx - (WINDOW_VISIBLE - 2));
+  
+  for (let i = startIdx; i <= maxIdx; i++) {
+    const h = WIN_HISTORY[i];
+    if (i < maxIdx - 1) {
+      values.push({val: h.r2, role:'old', idx:i});
+    } else if (i === maxIdx - 1) {
+      values.push({val: h.r2, role:'r0', idx:i});
+    } else if (i === maxIdx) {
+      values.push({val: h.r2, role:'r1', idx:i});
+    }
+  }
+
+  // Handle early states (< 2 numbers computed yet)
+  if (histCount === 0) {
+    // Just seeds set
+    if (r0 !== null) values.push({val:r0, role:'r0', idx:-1});
+    if (r1 !== null) values.push({val:r1, role:'r1', idx:-2});
+  } else if (histCount === 1) {
+    values.length = 0;
+    values.push({val: WIN_HISTORY[0].r0, role:'r0', idx:-1});
+    values.push({val: WIN_HISTORY[0].r1, role:'r1', idx:-2});
+  }
+
+  // Current r2 (if computed this step or subsequent)
+  const showR2 = hasR2 && (lineId === 'i2' || lineId === 'i3' || lineId === 'i4' || lineId === 'i5' || lineId === 'i6' || lineId === 'i7');
+  if (showR2 && values.length > 0) {
+    values.push({val: r2, role:'r2', idx:maxIdx+1, isNew: lineId==='i2'});
+  }
+
+  // If we have "old" cells before r0, add an ellipsis indicator
+  if (startIdx > 0) {
+    const ell = document.createElement('span');
+    ell.style.cssText = 'color:var(--dim2);font-size:18px;align-self:center;flex-shrink:0;padding:0 2px';
+    ell.textContent = '…';
+    track.appendChild(ell);
+  }
+
+  values.forEach((item, vi) => {
+    // Arrow before r0
+    if (item.role === 'r0' && vi > 0) {
+      const arr = document.createElement('span');
+      arr.className='sw-arrow';arr.textContent='→';
+      track.appendChild(arr);
+    }
+    // Plus between r1 and r2
+    if (item.role === 'r2') {
+      const plus = document.createElement('span');
+      plus.className='sw-plus';plus.textContent='+';
+      track.appendChild(plus);
+    }
+    // Equals before r2 value
+    if (item.role === 'r2') {
+      // already have plus, add =
+    }
+
+    const cell = document.createElement('div');
+    cell.className = 'sw-cell';
+    if (item.role === 'r0') cell.classList.add('r0-cell');
+    else if (item.role === 'r1') cell.classList.add('r1-cell');
+    else if (item.role === 'r2') cell.classList.add('r2-cell');
+    else cell.classList.add('dim-cell');
+    if (item.isNew) cell.classList.add('new-cell');
+
+    const lblEl = document.createElement('div');
+    lblEl.className = 'sw-cell-label';
+    if (item.role === 'r0') {lblEl.classList.add('l-r0');lblEl.textContent='R0';}
+    else if (item.role === 'r1'){lblEl.classList.add('l-r1');lblEl.textContent='R1';}
+    else if (item.role === 'r2'){lblEl.classList.add('l-r2');lblEl.textContent='R2';}
+    else {lblEl.classList.add('l-dim');lblEl.textContent='F'+(item.idx+1);}
+
+    const valEl = document.createElement('div');
+    valEl.className = 'sw-cell-val';
+    valEl.textContent = item.val !== null && item.val !== undefined ? item.val : '—';
+
+    cell.appendChild(lblEl);
+    cell.appendChild(valEl);
+    track.appendChild(cell);
+  });
+
+  // If only seeds (no computations yet) — show just r0=0, r1=1
+  if (values.length === 0 && r0 !== null) {
+    ['r0','r1'].forEach((rn,ri)=>{
+      const cell=document.createElement('div');cell.className='sw-cell '+(rn==='r0'?'r0-cell':'r1-cell');
+      cell.innerHTML=`<div class="sw-cell-label ${rn==='r0'?'l-r0':'l-r1'}">${rn.toUpperCase()}</div><div class="sw-cell-val">${rn==='r0'?r0:r1}</div>`;
+      if(ri>0){const arr=document.createElement('span');arr.className='sw-arrow';arr.textContent='→';track.insertBefore(arr,cell);}
+      track.appendChild(cell);
+    });
+  }
+
+  // Update formula
+  document.getElementById('fR0').textContent = 'R0='+(r0!==null?r0:'—');
+  document.getElementById('fR1').textContent = 'R1='+(r1!==null?r1:'—');
+  document.getElementById('fR2').textContent = 'R2='+(hasR2?r2:'—');
+}
+
+/* ══════════════════════════════════════════
+   RENDER STEP
+══════════════════════════════════════════ */
+function renderStep(idx) {
+  if(idx<0||idx>=TRACE.length)return;
+  const s=TRACE[idx];
+
+  // Code
+  LINES.forEach(line=>{
+    const el=document.getElementById('cline-'+line.id);if(!el)return;
+    const li=LINES.findIndex(l=>l.id===line.id);
+    const si=LINES.findIndex(l=>l.id===s.lineId);
+    el.classList.remove('active','done','future');
+    if(li<si)el.classList.add('done');
+    else if(li===si)el.classList.add('active');
+    else el.classList.add('future');
+  });
+  const ae=document.getElementById('cline-'+s.lineId);
+  if(ae)ae.scrollIntoView({block:'nearest',behavior:'smooth'});
+
+  // Sliding window
+  renderSlidingWindow(s.seqLen, s.r0, s.r1, s.r2, s.lineId);
+
+  // Summary reg values
+  setRegVal('sr0val', s.r0, prevR0);
+  setRegVal('sr1val', s.r1, prevR1);
+  setRegVal('sr2val', s.r2, prevR2);
+
+  // Flags
+  ['N','Z','C','V'].forEach(f=>{
+    const el=document.getElementById('flag'+f);
+    s.flags[f]?el.classList.add('set'):el.classList.remove('set');
+  });
+
+  // Explain
+  const lineData=LINES.find(l=>l.id===s.lineId);
+  document.getElementById('explainAsm').textContent=lineData?.asm||lineData?.text||'—';
+  document.getElementById('explainDesc').innerHTML=lineData?.desc||'';
+  const bel=document.getElementById('explainBranch');
+  if(s.lineId==='i6'){
+    bel.className=s.branch?'branch-yes':'branch-no';
+    bel.textContent=s.branch?'↩ R2 ≤ 1000 → BRANCH TAKEN → loop:':'→ R2 > 1000 → NO BRANCH → proceed to nop';
+  } else {bel.className='';bel.textContent='';}
+
+  // Sequence
+  SEQ_VALUES.forEach((v,i)=>{
+    const t=document.getElementById('tnum-'+i);
+    const b=document.getElementById('bar-'+i);if(!t||!b)return;
+    const vis=i<s.seqLen,isNew=i===s.seqLen-1&&s.lineId==='i2',fin=s.lineId==='i7'&&i===SEQ_VALUES.length-1;
+    t.classList.toggle('visible',vis);t.classList.toggle('final',fin);
+    if(isNew){t.classList.add('new');setTimeout(()=>t.classList.remove('new'),500);}
+    b.classList.toggle('active-bar',vis&&i===s.seqLen-1&&s.lineId!=='i7');
+    b.classList.toggle('final-bar',fin);
+    if(vis){const lh=Math.max(4,Math.log(v+1)/Math.log(MAX_VAL+1)*112);b.style.height=lh+'px';}
+    else{b.style.height='0px';}
+  });
+
+  // Progress
+  const pct=s.seqLen/SEQ_VALUES.length*100;
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progText').textContent=s.seqLen+' / '+SEQ_VALUES.length;
+
+  // Step counter
+  document.getElementById('stepCounter').textContent='STEP '+(idx+1)+' / '+TRACE.length;
+
+  // Spiral
+  drawSpiral(s.seqLen);
+
+  // Done
+  if(s.lineId==='i7'){
+    document.getElementById('doneVal').textContent='R2 = '+s.r2+' > 1000';
+    document.getElementById('doneBanner').classList.add('show');
+    stopPlay();
+  } else {
+    document.getElementById('doneBanner').classList.remove('show');
+  }
+
+  prevR0=s.r0;prevR1=s.r1;prevR2=s.r2;
+}
+
+function setRegVal(id, val, prev){
+  const el=document.getElementById(id);
+  el.textContent=val!==null&&val!==undefined?val:'—';
+  el.classList.remove('changed');
+  if(val!==prev&&prev!==null&&val!==null){void el.offsetWidth;el.classList.add('changed');}
+}
+
+/* ══════════════════════════════════════════
+   SPIRAL
+══════════════════════════════════════════ */
+function drawSpiral(count){
+  const canvas=document.getElementById('spiralCanvas');
+  const W=canvas.clientWidth||270;
+  canvas.width=W;canvas.height=120;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,120);
+  if(!count)return;
+  const vals=SEQ_VALUES.slice(0,count);
+  const maxV=Math.max(...vals,1);
+  const cx=W/2,cy=60;
+  let angle=0;
+  vals.forEach((v,i)=>{
+    const r=Math.max(2,v/maxV*52);
+    const isCur=i===vals.length-1;
+    const alpha=0.3+0.7*(i/vals.length);
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,angle,angle+Math.PI/2);
+    ctx.strokeStyle=isCur?`rgba(77,166,255,${alpha})`:`rgba(77,140,255,${alpha*0.5})`;
+    ctx.lineWidth=isCur?2.5:1.5;
+    if(isCur){ctx.shadowColor='var(--blue)';ctx.shadowBlur=10;}
+    ctx.stroke();ctx.shadowBlur=0;
+    const ex=cx+r*Math.cos(angle+Math.PI/2),ey=cy+r*Math.sin(angle+Math.PI/2);
+    ctx.beginPath();ctx.arc(ex,ey,isCur?3.5:2,0,Math.PI*2);
+    ctx.fillStyle=isCur?'var(--orange3)':`rgba(77,140,255,${alpha*0.5})`;
+    ctx.fill();
+    angle+=Math.PI/2;
+  });
+  if(vals.length){
+    ctx.fillStyle='rgba(255,224,102,.8)';ctx.font='bold 11px "Share Tech Mono"';
+    ctx.textAlign='center';ctx.fillText('F='+vals[vals.length-1],cx,cy+8);
+  }
+}
+
+/* ══════════════════════════════════════════
+   CONTROLS
+══════════════════════════════════════════ */
+function stepFwd(){
+  if(currentStep>=TRACE.length-1){stopPlay();return;}
+  currentStep++;renderStep(currentStep);
+  document.getElementById('btnBack').disabled=currentStep<=0;
+}
+function stepBack(){
+  if(currentStep<=0)return;
+  currentStep--;
+  prevR0=currentStep>0?TRACE[currentStep-1].r0:null;
+  prevR1=currentStep>0?TRACE[currentStep-1].r1:null;
+  prevR2=currentStep>0?TRACE[currentStep-1].r2:null;
+  renderStep(currentStep);
+  document.getElementById('btnBack').disabled=currentStep<=0;
+}
+function togglePlay(){
+  if(playTimer)stopPlay();
+  else{
+    const btn=document.getElementById('btnPlay');
+    btn.textContent='⏸ PAUSE';btn.style.borderColor='var(--orange)';btn.style.color='var(--orange)';
+    playTimer=setInterval(stepFwd,playSpeed);
+  }
+}
+function stopPlay(){
+  if(playTimer){clearInterval(playTimer);playTimer=null;}
+  const btn=document.getElementById('btnPlay');
+  btn.textContent='▶ PLAY';btn.style.borderColor='var(--blue2)';btn.style.color='var(--blue)';
+}
+function reset(){
+  stopPlay();currentStep=-1;prevR0=prevR1=prevR2=null;
+  document.getElementById('doneBanner').classList.remove('show');
+  document.getElementById('stepCounter').textContent='STEP 0 / '+TRACE.length;
+  document.getElementById('btnBack').disabled=true;
+  ['sr0val','sr1val','sr2val'].forEach(id=>document.getElementById(id).textContent='—');
+  ['N','Z','C','V'].forEach(f=>document.getElementById('flag'+f).classList.remove('set'));
+  document.querySelectorAll('.code-line').forEach(el=>{el.classList.remove('active','done');el.classList.add('future');});
+  SEQ_VALUES.forEach((_,i)=>{
+    const t=document.getElementById('tnum-'+i);const b=document.getElementById('bar-'+i);
+    if(t)t.classList.remove('visible','new','final');
+    if(b){b.style.height='0px';b.classList.remove('active-bar','final-bar');}
+  });
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('progText').textContent='0 / '+SEQ_VALUES.length;
+  document.getElementById('explainAsm').textContent='—';
+  document.getElementById('explainDesc').textContent='Press STEP or PLAY to begin execution.';
+  document.getElementById('explainBranch').textContent='';
+  document.getElementById('fR0').textContent='R0=—';
+  document.getElementById('fR1').textContent='R1=—';
+  document.getElementById('fR2').textContent='R2=—';
+  document.getElementById('swTrack').innerHTML='';
+  drawSpiral(0);
+}
+
+/* INIT */
+buildCodeListing();buildTape();buildBars();drawSpiral(0);
+document.getElementById('btnBack').disabled=true;
+</script>
+</body>
+</html>
