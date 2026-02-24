@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ARM Array Fill — Visualiser</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&family=Fredoka+One&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#10121c;
+  --surf:#171a28;
+  --surf2:#1e2235;
+  --surf3:#252a40;
+  --border:#2d334f;
+  --border2:#3a4266;
+  --text:#eef0fa;
+  --dim:#7880a8;
+  --dim2:#3d4568;
+  /* Playful accessible palette */
+  --coral:#ff6b6b;
+  --coral2:#ff4040;
+  --coral3:#ffadad;
+  --cyan:#4ecdc4;
+  --cyan2:#2bb5ab;
+  --cyan3:#a8f0ec;
+  --yellow:#ffd166;
+  --yellow2:#e6b800;
+  --purple:#c77dff;
+  --purple2:#9b4dca;
+  --green:#06d6a0;
+  --green2:#05a87e;
+  /* semantic */
+  --ptr-color:#4ecdc4;    /* r1 pointer = teal */
+  --ctr-color:#ffd166;    /* r2 counter = yellow */
+  --filled-color:#06d6a0; /* filled cell = green */
+  --active-color:#ff6b6b; /* current write = coral */
+}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Space Grotesk',sans-serif;
+  background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;
+}
+
+/* ── HEADER ── */
+.header{
+  flex-shrink:0;padding:10px 20px;
+  background:var(--surf);
+  border-bottom:2px solid var(--border2);
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;
+}
+.logo-area{display:flex;align-items:center;gap:10px}
+.logo-icon{
+  font-size:26px;width:42px;height:42px;
+  background:linear-gradient(135deg,var(--coral),var(--purple));
+  border-radius:12px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.logo-text{font-family:'Fredoka One',cursive;font-size:20px;color:var(--text);line-height:1.1}
+.logo-sub{font-size:11px;color:var(--dim);font-family:'Space Mono',monospace;margin-top:1px}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{
+  padding:7px 15px;border-radius:20px;border:2px solid transparent;
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .15s;letter-spacing:.03em;
+}
+.btn-step{background:var(--surf2);color:var(--cyan);border-color:var(--cyan2)}
+.btn-step:hover{background:rgba(78,205,196,.15);transform:translateY(-1px)}
+.btn-play{background:linear-gradient(135deg,var(--cyan2),var(--cyan));color:#0a2020;border-color:transparent}
+.btn-play:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 14px rgba(78,205,196,.4)}
+.btn-reset{background:var(--surf2);color:var(--coral);border-color:var(--coral2)}
+.btn-reset:hover{background:rgba(255,107,107,.12)}
+.btn:disabled{opacity:.3;cursor:default;transform:none!important}
+.step-chip{
+  padding:5px 12px;border-radius:20px;
+  background:var(--surf2);border:1px solid var(--border2);
+  font-family:'Space Mono',monospace;font-size:11px;color:var(--dim);
+  min-width:100px;text-align:center;
+}
+.speed-wrap{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+input[type=range]{accent-color:var(--cyan);width:70px}
+
+/* ── LAYOUT ── */
+.main{display:grid;grid-template-columns:230px 1fr 270px;flex:1;overflow:hidden;gap:2px;background:var(--border)}
+
+/* ── PANEL ── */
+.panel{background:var(--surf);overflow:hidden;display:flex;flex-direction:column}
+.panel-head{
+  padding:8px 14px;background:var(--surf2);
+  border-bottom:1px solid var(--border);
+  font-family:'Fredoka One',cursive;font-size:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.ph-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.panel-scroll{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+
+/* ── CODE PANEL ── */
+.code-line{
+  display:flex;align-items:flex-start;padding:3px 12px;
+  font-family:'Space Mono',monospace;font-size:12.5px;line-height:1.7;
+  transition:background .12s;cursor:default;position:relative;
+  gap:8px;
+}
+.code-line.active{background:rgba(78,205,196,.09)}
+.code-line.active::before{
+  content:'▶';position:absolute;left:3px;top:5px;
+  color:var(--cyan);font-size:9px;
+  animation:blink 1s infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.1}}
+.code-line.done{opacity:.35}
+.code-line.future{opacity:.25}
+.ln{width:20px;text-align:right;color:var(--dim2);font-size:10.5px;flex-shrink:0;margin-top:2px}
+.c-mn{color:#ff9a6c;font-weight:700}     /* mnemonic — orange */
+.c-rg{color:var(--cyan3)}               /* register — teal */
+.c-mm{color:var(--purple)}              /* memory — purple */
+.c-im{color:var(--yellow)}              /* immediate — yellow */
+.c-lb{color:#b8a2ff;font-weight:700}    /* label */
+.c-cm{color:var(--dim);font-size:11px;font-style:italic} /* comment */
+.c-dr{color:var(--dim)}                 /* directive */
+.sep-line{border:none;border-top:1px solid var(--border);margin:3px 12px}
+
+/* ── CENTRE: ARRAY VISUALISATION ── */
+.array-panel{padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+
+/* Register pill display */
+.regs-row{display:flex;gap:10px;flex-wrap:wrap}
+.reg-pill{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 14px;border-radius:12px;border:2px solid;
+  background:var(--surf2);flex:1;min-width:0;
+}
+.reg-pill.r1-pill{border-color:var(--ptr-color);background:rgba(78,205,196,.07)}
+.reg-pill.r2-pill{border-color:var(--ctr-color);background:rgba(255,209,102,.07)}
+.reg-pill-icon{font-size:18px;flex-shrink:0}
+.reg-pill-name{
+  font-family:'Fredoka One',cursive;font-size:13px;
+  flex-shrink:0;
+}
+.r1-pill .reg-pill-name{color:var(--ptr-color)}
+.r2-pill .reg-pill-name{color:var(--ctr-color)}
+.reg-pill-val{
+  font-family:'Space Mono',monospace;font-size:17px;font-weight:700;
+  flex:1;text-align:right;
+  transition:all .2s;
+}
+.r1-pill .reg-pill-val{color:var(--cyan3)}
+.r2-pill .reg-pill-val{color:var(--yellow)}
+.reg-pill-val.pop{animation:regPop .3s ease}
+@keyframes regPop{0%{transform:scale(1.25);color:#fff}100%{transform:scale(1)}}
+.reg-pill-sub{font-size:10px;color:var(--dim);margin-top:1px;font-family:'Space Mono',monospace}
+
+/* Explain bubble */
+.explain-bubble{
+  background:var(--surf2);border:2px solid var(--border2);
+  border-left:4px solid var(--cyan);
+  border-radius:0 12px 12px 0;
+  padding:10px 14px;font-size:13px;line-height:1.6;
+  min-height:54px;
+}
+.explain-asm{font-family:'Space Mono',monospace;font-size:13px;color:#ff9a6c;font-weight:700;margin-bottom:4px}
+.explain-txt{color:var(--dim);font-size:12.5px}
+.explain-txt strong{color:var(--text)}
+.explain-branch-yes{color:var(--cyan);font-size:12px;margin-top:4px;font-weight:700}
+.explain-branch-no{color:var(--coral);font-size:12px;margin-top:4px;font-weight:700}
+
+/* THE ARRAY GRID */
+.array-wrap{background:var(--surf2);border:2px solid var(--border);border-radius:14px;padding:12px}
+.array-title{
+  font-family:'Fredoka One',cursive;font-size:14px;color:var(--dim);
+  margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;
+}
+.array-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+
+.arr-cell{
+  border-radius:10px;border:2px solid var(--border2);
+  background:var(--surf3);
+  display:flex;flex-direction:column;align-items:center;
+  padding:7px 4px 5px;
+  transition:all .25s;
+  position:relative;overflow:hidden;cursor:default;
+  min-height:70px;justify-content:center;
+}
+/* idle */
+.arr-cell.empty{border-color:var(--dim2);background:var(--surf3)}
+/* r1 pointer is here (about to write) */
+.arr-cell.current{
+  border-color:var(--active-color);
+  background:rgba(255,107,107,.13);
+  box-shadow:0 0 0 3px rgba(255,107,107,.2);
+  transform:scale(1.05);
+}
+/* filled and pointer has moved on */
+.arr-cell.filled{
+  border-color:var(--filled-color);
+  background:rgba(6,214,160,.1);
+}
+.arr-cell.just-filled{
+  animation:cellFill .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes cellFill{
+  0%{transform:scale(1.12);background:rgba(6,214,160,.3)}
+  100%{transform:scale(1);background:rgba(6,214,160,.1)}
+}
+.arr-cell .cell-idx{
+  font-family:'Space Mono',monospace;font-size:9px;
+  color:var(--dim2);margin-bottom:4px;letter-spacing:.04em;
+}
+.arr-cell.current .cell-idx{color:var(--coral3)}
+.arr-cell.filled .cell-idx{color:var(--cyan2)}
+.arr-cell .cell-val{
+  font-family:'Fredoka One',cursive;font-size:22px;
+  color:var(--dim2);
+  transition:all .2s;min-height:28px;
+  display:flex;align-items:center;
+}
+.arr-cell.filled .cell-val{color:var(--green)}
+.arr-cell.current .cell-val{color:var(--coral)}
+.arr-cell .cell-addr{
+  font-family:'Space Mono',monospace;font-size:8px;
+  color:var(--dim2);margin-top:3px;
+}
+/* pointer arrow on current cell */
+.arr-cell.current::before{
+  content:'▼';
+  position:absolute;top:-16px;left:50%;transform:translateX(-50%);
+  color:var(--active-color);font-size:13px;
+  animation:bounce .6s infinite;
+}
+@keyframes bounce{0%,100%{top:-16px}50%{top:-20px}}
+
+/* progress bar */
+.progress-row{display:flex;align-items:center;gap:10px}
+.prog-track{flex:1;height:10px;background:var(--border);border-radius:5px;overflow:hidden}
+.prog-fill{height:100%;width:0;border-radius:5px;transition:width .4s ease;background:linear-gradient(90deg,var(--cyan2),var(--cyan3))}
+.prog-label{font-family:'Fredoka One',cursive;font-size:13px;color:var(--dim);white-space:nowrap}
+.prog-val{font-family:'Space Mono',monospace;font-size:12px;color:var(--cyan);font-weight:700;white-space:nowrap;min-width:50px;text-align:right}
+
+/* ── RIGHT: LOOP INSPECTOR ── */
+.loop-inner{padding:12px 14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+
+/* Loop counter visual */
+.loop-card{background:var(--surf2);border:2px solid var(--border);border-radius:12px;padding:12px}
+.loop-card-title{font-family:'Fredoka One',cursive;font-size:13px;color:var(--dim);margin-bottom:10px}
+
+/* Tally marks */
+.tally-wrap{display:flex;flex-wrap:wrap;gap:5px;min-height:36px}
+.tally-mark{
+  width:28px;height:36px;border-radius:5px;border:2px solid var(--border2);
+  background:var(--surf3);display:flex;align-items:center;justify-content:center;
+  font-family:'Fredoka One',cursive;font-size:16px;color:var(--dim2);
+  transition:all .3s;
+}
+.tally-mark.done-t{border-color:var(--green2);background:rgba(6,214,160,.1);color:var(--green)}
+.tally-mark.active-t{border-color:var(--active-color);background:rgba(255,107,107,.15);color:var(--coral);animation:tallypop .3s ease}
+@keyframes tallypop{0%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+/* CMP/branch visualiser */
+.cmp-card{background:var(--surf2);border:2px solid var(--border);border-radius:12px;padding:12px}
+.cmp-title{font-family:'Fredoka One',cursive;font-size:13px;color:var(--dim);margin-bottom:10px}
+.cmp-row{display:flex;align-items:center;gap:8px;justify-content:center;font-family:'Space Mono',monospace;font-size:14px}
+.cmp-box{
+  padding:8px 14px;border-radius:8px;border:2px solid var(--border2);
+  background:var(--surf3);font-weight:700;min-width:55px;text-align:center;
+  transition:all .25s;
+}
+.cmp-box.r2-b{border-color:var(--ctr-color);color:var(--yellow);background:rgba(255,209,102,.08)}
+.cmp-box.limit-b{border-color:var(--dim2);color:var(--dim)}
+.cmp-op{color:var(--dim);font-size:16px;font-weight:700}
+.cmp-result{
+  margin-top:10px;padding:8px 12px;border-radius:8px;
+  font-family:'Fredoka One',cursive;font-size:14px;text-align:center;
+  border:2px solid var(--border2);background:var(--surf3);color:var(--dim);
+  transition:all .3s;min-height:38px;display:flex;align-items:center;justify-content:center;
+}
+.cmp-result.branch-yes{border-color:var(--cyan);background:rgba(78,205,196,.1);color:var(--cyan)}
+.cmp-result.branch-no{border-color:var(--coral);background:rgba(255,107,107,.1);color:var(--coral)}
+
+/* Pointer walk */
+.ptr-card{background:var(--surf2);border:2px solid var(--border);border-radius:12px;padding:12px}
+.ptr-title{font-family:'Fredoka One',cursive;font-size:13px;color:var(--dim);margin-bottom:10px}
+.ptr-track{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.ptr-seg{
+  height:8px;width:18px;border-radius:3px;
+  background:var(--border);border:1px solid var(--border2);
+  transition:all .3s;flex-shrink:0;
+}
+.ptr-seg.visited{background:var(--cyan2);border-color:var(--cyan)}
+.ptr-seg.here{background:var(--coral);border-color:var(--coral2);animation:segPulse .8s infinite}
+@keyframes segPulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ptr-lbl{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);margin-top:6px}
+
+/* Concept box */
+.concept-box{
+  background:linear-gradient(135deg,rgba(78,205,196,.06),rgba(199,125,255,.06));
+  border:2px solid var(--border2);border-radius:12px;padding:12px;
+  font-size:12.5px;line-height:1.7;color:var(--dim);
+}
+.concept-box strong{color:var(--text)}
+.concept-box .emoji{font-size:18px;margin-right:5px}
+
+/* DONE overlay */
+.done-overlay{
+  position:absolute;inset:0;background:rgba(16,18,28,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;z-index:20;opacity:0;pointer-events:none;transition:opacity .35s;
+  border-radius:0;
+}
+.done-overlay.show{opacity:1;pointer-events:all}
+.done-big{font-family:'Fredoka One',cursive;font-size:36px;color:var(--green);line-height:1}
+.done-sub{font-family:'Space Mono',monospace;font-size:13px;color:var(--dim);text-align:center;line-height:1.6}
+.done-grid{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;max-width:340px}
+.done-num{
+  padding:4px 10px;border-radius:8px;
+  background:rgba(6,214,160,.12);border:2px solid var(--green2);
+  font-family:'Fredoka One',cursive;font-size:18px;color:var(--green);
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo-area">
+    <div class="logo-icon">📦</div>
+    <div>
+      <div class="logo-text">Array Fill Visualiser</div>
+      <div class="logo-sub">ARM assembly · loop + pointer + memory</div>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="step-chip" id="stepChip">step 0 / 0</div>
+    <button class="btn btn-step" id="btnBack" onclick="stepBack()">◀ back</button>
+    <button class="btn btn-step" id="btnStep" onclick="stepFwd()">step ▶</button>
+    <button class="btn btn-play" id="btnPlay" onclick="togglePlay()">▶ play</button>
+    <div class="speed-wrap">speed <input type="range" id="speedSlider" min="1" max="10" value="5" oninput="updateSpeed()"/></div>
+    <button class="btn btn-reset" onclick="reset()">↺ reset</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: CODE -->
+  <div class="panel">
+    <div class="panel-head"><div class="ph-dot" style="background:var(--coral)"></div>program3.s</div>
+    <div class="panel-scroll" id="codeBody"></div>
+  </div>
+
+  <!-- CENTRE: ARRAY -->
+  <div class="panel" style="position:relative">
+    <div class="panel-head"><div class="ph-dot" style="background:var(--cyan)"></div>Memory — array[0…19]</div>
+    <div class="panel-scroll">
+      <div class="array-panel" id="arrayPanel">
+
+        <!-- Register pills -->
+        <div class="regs-row">
+          <div class="reg-pill r1-pill">
+            <div class="reg-pill-icon">👉</div>
+            <div>
+              <div class="reg-pill-name">R1 — pointer</div>
+              <div class="reg-pill-sub">address of current slot</div>
+            </div>
+            <div>
+              <div class="reg-pill-val" id="r1val">—</div>
+            </div>
+          </div>
+          <div class="reg-pill r2-pill">
+            <div class="reg-pill-icon">🔢</div>
+            <div>
+              <div class="reg-pill-name">R2 — counter</div>
+              <div class="reg-pill-sub">value being written</div>
+            </div>
+            <div>
+              <div class="reg-pill-val" id="r2val">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explain -->
+        <div class="explain-bubble">
+          <div class="explain-asm" id="explainAsm">—</div>
+          <div class="explain-txt" id="explainTxt">Press step or play to begin.</div>
+          <div id="explainBranch"></div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-row">
+          <div class="prog-label">📦 filled</div>
+          <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+          <div class="prog-val" id="progVal">0 / 20</div>
+        </div>
+
+        <!-- ARRAY GRID -->
+        <div class="array-wrap">
+          <div class="array-title">
+            <span>array[ ] in memory</span>
+            <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--dim2)">base: 0x0000</span>
+          </div>
+          <div class="array-grid" id="arrayGrid"></div>
+        </div>
+
+      </div>
+    </div>
+    <!-- Done overlay -->
+    <div class="done-overlay" id="doneOverlay">
+      <div class="done-big">🎉 Done!</div>
+      <div class="done-sub">All 20 values written.<br>array[0..19] = {1, 2, 3 … 20}</div>
+      <div class="done-grid" id="doneGrid"></div>
+      <button class="btn btn-reset" onclick="reset()">↺ go again</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: LOOP INSPECTOR -->
+  <div class="panel">
+    <div class="panel-head"><div class="ph-dot" style="background:var(--yellow)"></div>Loop Inspector</div>
+    <div class="panel-scroll">
+      <div class="loop-inner">
+
+        <!-- Tally -->
+        <div class="loop-card">
+          <div class="loop-card-title">🔁 Iteration counter</div>
+          <div class="tally-wrap" id="tallyWrap"></div>
+        </div>
+
+        <!-- CMP/branch -->
+        <div class="cmp-card">
+          <div class="cmp-title">⚖️ Compare &amp; Branch</div>
+          <div class="cmp-row">
+            <div class="cmp-box r2-b" id="cmpR2">R2 = —</div>
+            <div class="cmp-op">vs</div>
+            <div class="cmp-box limit-b">#21</div>
+          </div>
+          <div class="cmp-result" id="cmpResult">waiting for cmp...</div>
+        </div>
+
+        <!-- Pointer walk -->
+        <div class="ptr-card">
+          <div class="ptr-title">🚶 R1 pointer walk (+4 bytes each step)</div>
+          <div class="ptr-track" id="ptrTrack"></div>
+          <div class="ptr-lbl" id="ptrLbl">array base + 0 bytes</div>
+        </div>
+
+        <!-- Concept box -->
+        <div class="concept-box">
+          <div><span class="emoji">🗺️</span><strong>Why +4?</strong></div>
+          Each number is a 32-bit <strong>word</strong> = 4 bytes. So to move to the next slot in the array, we add 4 to the address. Think of it like skipping 4 houses on a street to reach the next one!
+        </div>
+
+        <div class="concept-box">
+          <div><span class="emoji">🔄</span><strong>How the loop works</strong></div>
+          We keep looping <strong>while R2 ≠ 21</strong>. Once R2 hits 21, that means we've stored 1 through 20 — job done!
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+/* ══════════════════════════════════════════
+   PROGRAM DEFINITION
+══════════════════════════════════════════ */
+const LINES = [
+  {id:'cm0', type:'comment',  text:'@ Fill array with 1, 2, 3…'},
+  {id:'d0',  type:'directive',text:'.text'},
+  {id:'d1',  type:'directive',text:'.global _start'},
+  {id:'l0',  type:'label',    text:'_start:'},
+  {id:'i0',  type:'instr',    raw:'ldr r1, =array',
+             html:'<span class="c-mn">ldr</span> <span class="c-rg">r1</span>, <span class="c-mm">=array</span>',
+             asm:'ldr r1, =array',
+             txt:`Load the <strong>base address</strong> of the array into R1. R1 is now a pointer pointing at array[0].`},
+  {id:'i1',  type:'instr',    raw:'mov r2, #1',
+             html:'<span class="c-mn">mov</span> <span class="c-rg">r2</span>, <span class="c-im">#1</span>',
+             asm:'mov r2, #1',
+             txt:`Set R2 = <strong>1</strong>. This is the first value we'll write — and it's our loop counter too.`},
+  {id:'l1',  type:'label',    text:'loop:'},
+  {id:'i2',  type:'instr',    raw:'str r2, [r1]',
+             html:'<span class="c-mn">str</span> <span class="c-rg">r2</span>, [<span class="c-rg">r1</span>]',
+             asm:'str r2, [r1]',
+             txt:'<strong>Write</strong> R2\'s value into memory at address R1. This fills the current slot in the array.'},
+  {id:'i3',  type:'instr',    raw:'add r1, #4',
+             html:'<span class="c-mn">add</span> <span class="c-rg">r1</span>, <span class="c-im">#4</span>',
+             asm:'add r1, #4',
+             txt:`<strong>Move the pointer forward</strong> by 4 bytes — skipping to the next slot. Each word is 4 bytes.`},
+  {id:'i4',  type:'instr',    raw:'add r2, #1',
+             html:'<span class="c-mn">add</span> <span class="c-rg">r2</span>, <span class="c-im">#1</span>',
+             asm:'add r2, #1',
+             txt:`<strong>Increment the counter</strong>. Next loop will write the next number.`},
+  {id:'i5',  type:'instr',    raw:'cmp r2, #21',
+             html:'<span class="c-mn">cmp</span> <span class="c-rg">r2</span>, <span class="c-im">#21</span>',
+             asm:'cmp r2, #21',
+             txt:'<strong>Compare R2 with 21.</strong> Sets flags — the result is R2 − 21. If zero, we\'re done!'},
+  {id:'i6',  type:'instr',    raw:'bne loop',
+             html:'<span class="c-mn">bne</span> <span class="c-lb">loop</span>',
+             asm:'bne loop',
+             txt:`<strong>Branch if Not Equal.</strong> If R2 ≠ 21, jump back to loop: and go again.`},
+  {id:'sep', type:'sep'},
+  {id:'i7',  type:'instr',    raw:'nop',
+             html:'<span class="c-mn">nop</span>',
+             asm:'nop',
+             txt:`<strong>All done!</strong> We stop here. All 20 values have been written into the array.`},
+  {id:'sep2',type:'sep'},
+  {id:'d2',  type:'directive',text:'.data'},
+  {id:'l2',  type:'label',    text:'array:'},
+  {id:'d3',  type:'directive',text:'    .skip 80  @ 20 × 4 bytes'},
+];
+
+/* ══════════════════════════════════════════
+   TRACE BUILDER
+══════════════════════════════════════════ */
+function buildTrace() {
+  const S=[];
+  const p=(lineId,r1,r2,filled,cmpDone,branch)=>S.push({lineId,r1,r2,filled:[...filled],cmpDone,branch});
+  let r1=null,r2=null,filled=[],cmpDone=false,branch=false;
+  p('cm0',r1,r2,filled,cmpDone,branch);
+  p('d0',r1,r2,filled,cmpDone,branch);
+  p('d1',r1,r2,filled,cmpDone,branch);
+  p('l0',r1,r2,filled,cmpDone,branch);
+  r1=0; p('i0',r1,r2,filled,cmpDone,branch);
+  r2=1; p('i1',r1,r2,filled,cmpDone,branch);
+  while(true){
+    p('l1',r1,r2,filled,false,false);
+    // str r2,[r1] — fill slot r1/4
+    const idx=r1/4;
+    const nf=[...filled];nf[idx]=r2;
+    p('i2',r1,r2,nf,false,false);
+    filled=nf;
+    // add r1,#4
+    r1+=4; p('i3',r1,r2,filled,false,false);
+    // add r2,#1
+    r2+=1; p('i4',r1,r2,filled,false,false);
+    // cmp r2,#21
+    const ne=r2!==21;
+    p('i5',r1,r2,filled,true,ne);
+    // bne
+    p('i6',r1,r2,filled,true,ne);
+    if(!ne)break;
+  }
+  p('sep',r1,r2,filled,false,false);
+  p('i7',r1,r2,filled,false,false);
+  p('sep2',r1,r2,filled,false,false);
+  p('d2',r1,r2,filled,false,false);
+  p('l2',r1,r2,filled,false,false);
+  p('d3',r1,r2,filled,false,false);
+  return S;
+}
+const TRACE=buildTrace();
+
+/* ══════════════════════════════════════════
+   BUILD STATIC UI
+══════════════════════════════════════════ */
+function buildCode(){
+  const body=document.getElementById('codeBody');
+  LINES.forEach((line,i)=>{
+    if(line.type==='sep'){const hr=document.createElement('hr');hr.className='sep-line';body.appendChild(hr);return;}
+    const row=document.createElement('div');
+    row.className='code-line future';
+    row.id='cl-'+line.id;
+    let inner='<span class="ln">'+(i+1)+'</span><span>';
+    if(line.type==='directive'||line.type==='comment') inner+='<span class="c-dr">'+line.text+'</span>';
+    else if(line.type==='label') inner+='<span class="c-lb">'+line.text+'</span>';
+    else inner+=line.html||line.raw||'';
+    inner+='</span>';
+    row.innerHTML=inner;
+    body.appendChild(row);
+  });
+}
+
+function buildArrayGrid(){
+  const grid=document.getElementById('arrayGrid');
+  for(let i=0;i<20;i++){
+    const cell=document.createElement('div');
+    cell.className='arr-cell empty';cell.id='acell-'+i;
+    cell.innerHTML=`<div class="cell-idx">array[${i}]</div><div class="cell-val" id="aval-${i}">—</div><div class="cell-addr">+${i*4}B</div>`;
+    grid.appendChild(cell);
+  }
+}
+
+function buildTally(){
+  const wrap=document.getElementById('tallyWrap');
+  for(let i=0;i<20;i++){
+    const m=document.createElement('div');
+    m.className='tally-mark';m.id='tally-'+i;m.textContent=i+1;
+    wrap.appendChild(m);
+  }
+}
+
+function buildPtrTrack(){
+  const track=document.getElementById('ptrTrack');
+  for(let i=0;i<20;i++){
+    const seg=document.createElement('div');seg.className='ptr-seg';seg.id='ptr-'+i;
+    track.appendChild(seg);
+  }
+}
+
+function buildDoneGrid(){
+  const g=document.getElementById('doneGrid');
+  for(let i=1;i<=20;i++){
+    const d=document.createElement('div');d.className='done-num';d.textContent=i;g.appendChild(d);
+  }
+}
+
+/* ══════════════════════════════════════════
+   RENDER
+══════════════════════════════════════════ */
+let prevR1=null,prevR2=null,prevFilled=[];
+let currentStep=-1,playTimer=null,playSpeed=600;
+
+function renderStep(idx){
+  if(idx<0||idx>=TRACE.length)return;
+  const s=TRACE[idx];
+
+  // Code highlighting
+  LINES.forEach(line=>{
+    const el=document.getElementById('cl-'+line.id);if(!el)return;
+    const li=LINES.findIndex(l=>l.id===line.id);
+    const si=LINES.findIndex(l=>l.id===s.lineId);
+    el.classList.remove('active','done','future');
+    if(li<si)el.classList.add('done');
+    else if(li===si)el.classList.add('active');
+    else el.classList.add('future');
+  });
+  const ae=document.getElementById('cl-'+s.lineId);
+  if(ae)ae.scrollIntoView({block:'nearest',behavior:'smooth'});
+
+  // Register pills
+  setReg('r1val',s.r1,prevR1, s.r1!==null ? ('0x'+s.r1.toString(16).padStart(4,'0').toUpperCase()) : '—');
+  setReg('r2val',s.r2,prevR2, s.r2!==null ? s.r2 : '—');
+
+  // Explain
+  const ld=LINES.find(l=>l.id===s.lineId);
+  document.getElementById('explainAsm').textContent=ld?.asm||ld?.text||'—';
+  document.getElementById('explainTxt').innerHTML=ld?.txt||'';
+  const bel=document.getElementById('explainBranch');
+  if(s.lineId==='i6'&&s.cmpDone){
+    bel.className=s.branch?'explain-branch-yes':'explain-branch-no';
+    bel.textContent=s.branch?'↩ R2 ≠ 21 → loop back!':'→ R2 = 21 → exit loop, done!';
+  } else {bel.className='';bel.textContent='';}
+
+  // Array cells
+  const curSlot = s.r1!==null ? s.r1/4 : -1;
+  for(let i=0;i<20;i++){
+    const cell=document.getElementById('acell-'+i);
+    const val=document.getElementById('aval-'+i);
+    const fv=s.filled[i];
+    const wasEmpty=prevFilled[i]===undefined;
+    const justFilled=fv!==undefined && wasEmpty;
+    cell.classList.remove('empty','current','filled','just-filled');
+    if(fv!==undefined){
+      cell.classList.add('filled');
+      if(justFilled)cell.classList.add('just-filled');
+      val.textContent=fv;
+    } else if(i===curSlot && s.lineId==='i2'){
+      cell.classList.add('current');
+      val.textContent=s.r2||'—';
+    } else if(i===curSlot && (s.lineId==='l1'||s.lineId==='i2')){
+      cell.classList.add('current');
+      val.textContent='?';
+    } else {
+      cell.classList.add('empty');
+      val.textContent='—';
+    }
+  }
+
+  // Progress
+  const filled=s.filled.filter(v=>v!==undefined).length;
+  document.getElementById('progFill').style.width=(filled/20*100)+'%';
+  document.getElementById('progVal').textContent=filled+' / 20';
+
+  // Tally
+  for(let i=0;i<20;i++){
+    const t=document.getElementById('tally-'+i);
+    const isActive=s.r2!==null&&i===s.r2-1&&(s.lineId==='l1'||s.lineId==='i2');
+    const isDone=s.filled[i]!==undefined;
+    t.classList.remove('done-t','active-t');
+    if(isActive)t.classList.add('active-t');
+    else if(isDone)t.classList.add('done-t');
+  }
+
+  // CMP/branch
+  document.getElementById('cmpR2').textContent='R2 = '+(s.r2!==null?s.r2:'—');
+  const cr=document.getElementById('cmpResult');
+  if(s.cmpDone){
+    cr.className='cmp-result '+(s.branch?'branch-yes':'branch-no');
+    cr.textContent=s.branch?'R2 ≠ 21 → keep looping 🔄':'R2 = 21 → stop! ✅';
+  } else {cr.className='cmp-result';cr.textContent='(not yet compared)';}
+
+  // Pointer track
+  const ptrIdx=s.r1!==null?Math.min(s.r1/4,19):-1;
+  for(let i=0;i<20;i++){
+    const seg=document.getElementById('ptr-'+i);
+    seg.classList.remove('visited','here');
+    if(s.filled[i]!==undefined)seg.classList.add('visited');
+    else if(i===ptrIdx&&s.r1!==null)seg.classList.add('here');
+  }
+  document.getElementById('ptrLbl').textContent=
+    s.r1!==null?'array base + '+s.r1+' bytes (= slot '+(s.r1/4)+')':'awaiting…';
+
+  // Step chip
+  document.getElementById('stepChip').textContent='step '+(idx+1)+' / '+TRACE.length;
+
+  // Done overlay
+  if(s.lineId==='i7'){
+    document.getElementById('doneOverlay').classList.add('show');
+    stopPlay();
+  } else {
+    document.getElementById('doneOverlay').classList.remove('show');
+  }
+
+  prevR1=s.r1;prevR2=s.r2;prevFilled=[...s.filled];
+}
+
+function setReg(id,newVal,oldVal,display){
+  const el=document.getElementById(id);
+  el.textContent=display;
+  el.classList.remove('pop');
+  if(newVal!==null&&newVal!==oldVal&&oldVal!==null){void el.offsetWidth;el.classList.add('pop');}
+}
+
+/* ══════════════════════════════════════════
+   CONTROLS
+══════════════════════════════════════════ */
+function stepFwd(){
+  if(currentStep>=TRACE.length-1){stopPlay();return;}
+  currentStep++;renderStep(currentStep);
+  document.getElementById('btnBack').disabled=currentStep<=0;
+}
+function stepBack(){
+  if(currentStep<=0)return;
+  currentStep--;
+  prevR1=currentStep>0?TRACE[currentStep-1].r1:null;
+  prevR2=currentStep>0?TRACE[currentStep-1].r2:null;
+  prevFilled=currentStep>0?[...TRACE[currentStep-1].filled]:[];
+  renderStep(currentStep);
+  document.getElementById('btnBack').disabled=currentStep<=0;
+}
+function togglePlay(){
+  if(playTimer)stopPlay();
+  else{
+    const b=document.getElementById('btnPlay');b.textContent='⏸ pause';
+    b.style.background='linear-gradient(135deg,var(--coral2),var(--coral))';
+    playTimer=setInterval(stepFwd,playSpeed);
+  }
+}
+function stopPlay(){
+  if(playTimer){clearInterval(playTimer);playTimer=null;}
+  const b=document.getElementById('btnPlay');b.textContent='▶ play';
+  b.style.background='linear-gradient(135deg,var(--cyan2),var(--cyan))';
+}
+function updateSpeed(){
+  const v=parseInt(document.getElementById('speedSlider').value);
+  playSpeed=Math.round(1400-v*120);
+  if(playTimer){clearInterval(playTimer);playTimer=setInterval(stepFwd,playSpeed);}
+}
+function reset(){
+  stopPlay();currentStep=-1;prevR1=prevR2=null;prevFilled=[];
+  document.getElementById('btnBack').disabled=true;
+  document.getElementById('doneOverlay').classList.remove('show');
+  document.getElementById('stepChip').textContent='step 0 / '+TRACE.length;
+  document.getElementById('r1val').textContent='—';
+  document.getElementById('r2val').textContent='—';
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('progVal').textContent='0 / 20';
+  for(let i=0;i<20;i++){
+    const c=document.getElementById('acell-'+i);c.className='arr-cell empty';
+    document.getElementById('aval-'+i).textContent='—';
+    const t=document.getElementById('tally-'+i);t.classList.remove('done-t','active-t');
+    const p=document.getElementById('ptr-'+i);p.classList.remove('visited','here');
+  }
+  document.getElementById('cmpR2').textContent='R2 = —';
+  document.getElementById('cmpResult').className='cmp-result';
+  document.getElementById('cmpResult').textContent='waiting for cmp...';
+  document.getElementById('ptrLbl').textContent='awaiting…';
+  document.getElementById('explainAsm').textContent='—';
+  document.getElementById('explainTxt').textContent='Press step or play to begin.';
+  document.getElementById('explainBranch').textContent='';
+  document.querySelectorAll('.code-line').forEach(el=>{el.classList.remove('active','done');el.classList.add('future');});
+}
+
+/* INIT */
+buildCode();buildArrayGrid();buildTally();buildPtrTrack();buildDoneGrid();
+document.getElementById('btnBack').disabled=true;
+</script>
+</body>
+</html>
